@@ -254,7 +254,7 @@ export function StepBeautify({
             <h3 className="text-sm font-semibold text-indigo-300">前端美化选项</h3>
 
             {/* Status bar */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -278,7 +278,7 @@ export function StepBeautify({
             </div>
 
             {/* Story beautification */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -295,7 +295,7 @@ export function StepBeautify({
                   value={mvu.storyBeautifyTag}
                   onChange={(e) => onChange({ ...mvu, storyBeautifyTag: e.target.value })}
                   placeholder="story_view"
-                  className="ml-2 text-xs bg-slate-700 text-slate-300 border border-slate-600 rounded px-2 py-1 w-32"
+                  className="ml-0 sm:ml-2 text-xs bg-slate-700 text-slate-300 border border-slate-600 rounded px-2 py-1 w-full sm:w-32"
                 />
               )}
             </div>

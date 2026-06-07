@@ -35,15 +35,17 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text);
-  min-height: 100vh;
+  min-height: 100dvh;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
   text-shadow: var(--text-shadow);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
 }
 
@@ -142,6 +144,18 @@ body {
   backdrop-filter: blur(var(--blur-intensity));
   border-right: 1px solid rgba(99, 102, 241, 0.08);
   box-shadow: var(--card-shadow), inset -1px 0 0 rgba(148, 163, 184, 0.04);
+}
+
+/* Glass effect for mobile header bar - uses theme variables */
+.glass-header {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, var(--surface-opacity)) 0%,
+    rgba(15, 23, 42, calc(var(--surface-opacity) * 0.92)) 100%
+  );
+  backdrop-filter: blur(var(--blur-intensity));
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Glass effect for cards */
@@ -361,4 +375,72 @@ select:focus {
 /* Auto text color for light backgrounds */
 .input-light-text {
   color: #1e293b !important;
+}
+
+/* Hide scrollbar utility for horizontal scrollers */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Mobile Responsive ─────────────────────────────────────────────── */
+
+/* Small screens: tighter spacing */
+@media (max-width: 767px) {
+  /* Reduce heading sizes */
+  main h1 { font-size: 1.25rem !important; }
+  main h2 { font-size: 1.1rem !important; }
+
+  /* Compact padding for wizard shell */
+  main .max-w-6xl { padding-left: 0.75rem; padding-right: 0.75rem; }
+
+  /* Stack flex rows that need wrapping on small screens */
+  .wizard-header-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Full-width buttons on mobile */
+  main button {
+    min-height: 38px;
+  }
+
+  /* Textarea / input: ensure readable on mobile */
+  textarea {
+    font-size: 14px !important;
+    min-height: 100px !important;
+  }
+
+  /* Prevent horizontal scroll from fixed widths */
+  .flex { min-width: 0; }
+
+  /* Character editor: stack vertically */
+  .character-editor-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+}
+
+/* Medium screens: slightly tighter */
+@media (min-width: 768px) and (max-width: 1023px) {
+  main .max-w-6xl { padding-left: 1rem; padding-right: 1rem; }
+}
+
+/* Touch-friendly: bigger tap targets on mobile */
+@media (pointer: coarse) {
+  button, a, [role="button"] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* Bigger scrollbar for touch */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 }

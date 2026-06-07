@@ -1,10 +1,16 @@
 /**
  * Sidebar navigation component with SVG icons and polished interactions.
+ * Mobile: slides in from left with overlay, closes on navigation.
  */
 import { NavLink } from 'react-router-dom';
-import { Home, Settings, Wand2, BookOpen, MessageCircle, PenTool } from 'lucide-react';
+import { Home, Settings, Wand2, BookOpen, MessageCircle, PenTool, X } from 'lucide-react';
 import { BackgroundChanger } from '../shared/BackgroundChanger';
 import { ThemeSettings } from '../shared/ThemeSettings';
+
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
 
 const navItems = [
   { to: '/', label: '首页', icon: Home, end: true },
@@ -15,15 +21,35 @@ const navItems = [
   { to: '/dialogue', label: 'AI 创作助手', icon: PenTool },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
-    <aside className="w-60 h-screen sticky top-0 glass-sidebar flex flex-col shrink-0">
-      {/* App title */}
-      <div className="px-5 py-6 border-b border-white/5">
-        <h1 className="text-lg font-bold text-themed tracking-wide" style={{ color: 'var(--color-primary)' }}>
-          吟游手册
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">AI 角色卡辅助工具</p>
+    <aside
+      className={`
+        w-60 h-dvh sticky top-0 glass-sidebar flex flex-col shrink-0 z-50
+        /* Mobile: fixed overlay sidebar */
+        max-md:fixed max-md:inset-y-0 max-md:left-0
+        max-md:transition-transform max-md:duration-300 max-md:ease-in-out
+        ${isOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}
+        /* Desktop: always visible */
+        md:translate-x-0 md:sticky
+      `}
+    >
+      {/* App title + close button (mobile) */}
+      <div className="px-5 py-6 border-b border-white/5 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-themed tracking-wide" style={{ color: 'var(--color-primary)' }}>
+            吟游手册
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">AI 角色卡辅助工具</p>
+        </div>
+        {/* Mobile close button */}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          aria-label="关闭菜单"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Navigation links */}
@@ -33,6 +59,7 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200
               ${isActive
@@ -40,7 +67,7 @@ export function Sidebar() {
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`
             }
-            style={({ isActive }) => isActive ? { 
+            style={({ isActive }) => isActive ? {
               backgroundColor: 'color-mix(in srgb, var(--color-primary) 15%, transparent)',
               color: 'var(--color-primary)',
               textShadow: 'var(--text-shadow)'
@@ -52,7 +79,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer - Settings */}
+      {/* Footer */}
       <div className="px-3 py-2 border-t border-white/5 space-y-1">
         <BackgroundChanger />
         <ThemeSettings />

@@ -44,19 +44,19 @@ export function HomePage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-white">吟游手册</h1>
-        <p className="mt-2 text-slate-400">
+      <div className="mb-6 sm:mb-10">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">吟游手册</h1>
+        <p className="mt-2 text-sm sm:text-base text-slate-400">
           创建、管理和测试 Tavern AI 角色卡。使用向导分步构建卡片，并用 AI 辅助生成内容。
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {actions.map((item) => (
           <button
             key={item.title}
             onClick={item.action}
-            className={`group text-left rounded-2xl border border-white/5 bg-slate-800/40 p-6
+            className={`group text-left rounded-2xl border border-white/5 bg-slate-800/40 p-4 sm:p-6
               hover:border-white/10 hover:bg-slate-800/60 hover:-translate-y-0.5
               transition-all duration-300 ease-out cursor-pointer
               shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 ${item.glow}`}

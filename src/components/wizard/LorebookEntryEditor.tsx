@@ -124,7 +124,7 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
       {/* ── Section 2: 触发与插入参数 ─────────────────────── */}
       <div className="border-t border-slate-700/50 pt-3">
         <p className="text-[11px] font-medium text-slate-400 mb-2">触发与插入参数</p>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
 
           {/* Position */}
           <div>
@@ -225,7 +225,7 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
           </div>
 
           {/* Group + weight */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>包含组 (group)</label>
               <input type="text" value={entry.group || ''}
@@ -244,7 +244,7 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
           </div>
 
           {/* Timed effects: sticky, cooldown, delay */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>粘性 (sticky)</label>
               <input type="number" min={0} value={entry.sticky}

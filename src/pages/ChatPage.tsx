@@ -39,7 +39,7 @@ export function ChatPage() {
   };
 
   return (
-    <div className="animate-fade-in flex flex-col h-[calc(100vh-4rem)]">
+    <div className="animate-fade-in flex flex-col h-[calc(100dvh-4rem)]">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 shrink-0 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">测试对话</h1>

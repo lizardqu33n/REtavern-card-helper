@@ -272,7 +272,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, onUpdate 
           <span className="font-semibold">世界书 = 角色的详细设定库：</span>
           每个条目通过<strong>关键词</strong>触发，聊天中提到相关内容时自动注入 AI 上下文。
         </p>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-indigo-300/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-indigo-300/60">
           <p>✦ <strong>每句话过四问</strong>：删了AI会错吗？是信息还是装饰？列表能替代吗？不看原文能理解吗？</p>
           <p>✦ <strong>数据库格式</strong>：用键值对和列表，不用散文</p>
           <p>✦ <strong>不写AI已知信息</strong>：只写差异信息</p>
@@ -283,7 +283,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, onUpdate 
       </div>
 
       {/* Stats bar */}
-      <div className="flex items-center gap-3 mb-4 text-[11px]">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 text-[11px]">
         <span className="bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded">{totalEntries} 总计</span>
         <span className="bg-green-900/30 text-green-300 px-2 py-0.5 rounded">{enabledEntries} 启用</span>
         <span className="bg-amber-900/30 text-amber-300 px-2 py-0.5 rounded">{constantEntries} 常驻</span>
@@ -292,7 +292,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, onUpdate 
 
       {/* AI Tools bar */}
       {entries.length > 0 && (
-        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-amber-900/10 border border-amber-700/30">
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded-lg bg-amber-900/10 border border-amber-700/30">
           <span className="text-xs text-amber-300 font-medium shrink-0">🧹 AI 工具：</span>
           <Button
             variant="secondary"

@@ -105,9 +105,9 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
       </div>
 
       {/* Word count presets */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         <span className="text-xs text-slate-400 shrink-0">目标字数：</span>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {WORD_COUNT_PRESETS.map((preset) => (
             <button
               key={preset.value}

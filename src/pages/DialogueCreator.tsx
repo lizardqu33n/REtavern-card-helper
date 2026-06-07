@@ -2,6 +2,7 @@
  * DialogueCreator — AI creative assistant with conversation history.
  * Users chat with AI to brainstorm, review, and improve their cards.
  * All conversations are saved locally and can be revisited anytime.
+ * Mobile: collapsible history panel, full-width chat.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '../components/shared/Button';
@@ -9,6 +10,7 @@ import { useToast } from '../components/shared/Toast';
 import { callAIStreaming } from '../services/ai-service';
 import { db, type CreatorChat } from '../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { History, X } from 'lucide-react';
 import type { AIMessage } from '../services/ai-service';
 
 interface ChatMessage {
@@ -50,6 +52,7 @@ export function DialogueCreator() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [restored, setRestored] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // ── Restore last viewed chat on mount ──────────────────────────────────────
   useEffect(() => {
@@ -87,6 +90,7 @@ export function DialogueCreator() {
       setCurrentChatId(chatId);
       setMessages(chat.messages);
       setInputValue('');
+      setHistoryOpen(false);
     }
   }, []);
 
@@ -114,6 +118,7 @@ export function DialogueCreator() {
     setMessages([]);
     setInputValue('');
     setStreamingText('');
+    setHistoryOpen(false);
   }, []);
 
   // ── Delete conversation ───────────────────────────────────────────────────
@@ -151,7 +156,6 @@ export function DialogueCreator() {
     setStreamingText('');
 
     try {
-      // Build messages for API
       const apiMessages: AIMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...updatedMessages.map(m => ({ role: m.role, content: m.content })),
@@ -168,7 +172,6 @@ export function DialogueCreator() {
       setMessages(finalMessages);
       setStreamingText('');
 
-      // Save to DB
       await saveChat(currentChatId, finalMessages);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'AI 回复失败';
@@ -195,7 +198,6 @@ export function DialogueCreator() {
     }
   }, [handleSend]);
 
-  // ── Quick prompts ─────────────────────────────────────────────────────────
   const quickPrompts = [
     '帮我设计一个有反差感的角色',
     '这个角色描述怎么更有层次感？',
@@ -204,13 +206,35 @@ export function DialogueCreator() {
   ];
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-4rem)]">
+    <div className="animate-fade-in flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-4rem)] relative">
+      {/* ── Mobile history overlay ─────────────────────────────────────────── */}
+      {historyOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setHistoryOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar: History ────────────────────────────────────────────────── */}
-      <aside className="w-64 shrink-0 border-r border-slate-700 flex flex-col bg-slate-900/30">
-        <div className="p-3 border-b border-slate-700">
-          <Button variant="primary" size="sm" className="w-full" onClick={handleNewChat}>
+      <aside
+        className={`
+          w-64 shrink-0 border-r border-slate-700 flex flex-col bg-slate-900/60
+          max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40
+          max-md:transition-transform max-md:duration-300 max-md:ease-in-out
+          ${historyOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}
+          md:translate-x-0 md:relative
+        `}
+      >
+        <div className="p-3 border-b border-slate-700 flex items-center justify-between gap-2">
+          <Button variant="primary" size="sm" className="flex-1" onClick={handleNewChat}>
             + 新对话
           </Button>
+          <button
+            onClick={() => setHistoryOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {allChats.length === 0 && (
@@ -233,7 +257,7 @@ export function DialogueCreator() {
               </span>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteChat(chat.id!); }}
-                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs transition-opacity"
+                className="opacity-0 group-hover:opacity-100 max-md:opacity-60 text-red-400 hover:text-red-300 text-xs transition-opacity"
                 title="删除"
               >
                 ×
@@ -255,22 +279,32 @@ export function DialogueCreator() {
 
       {/* ── Main: Chat ──────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="shrink-0 px-6 py-3 border-b border-slate-700">
-          <h1 className="text-lg font-semibold text-white">
-            {currentChatId ? allChats.find(c => c.id === currentChatId)?.title || '对话' : 'AI 创作助手'}
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            和 AI 助手聊天，收集灵感、打磨设定、优化内容
-          </p>
+        <div className="shrink-0 px-4 sm:px-6 py-3 border-b border-slate-700 flex items-center gap-3">
+          {/* Mobile: history toggle */}
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title="历史记录"
+          >
+            <History size={18} />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold text-white truncate">
+              {currentChatId ? allChats.find(c => c.id === currentChatId)?.title || '对话' : 'AI 创作助手'}
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
+              和 AI 助手聊天，收集灵感、打磨设定、优化内容
+            </p>
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
             {messages.length === 0 && !isStreaming && (
-              <div className="text-center py-16">
-                <p className="text-slate-500 text-sm mb-6">向 AI 助手提问关于角色卡创作的任何问题</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
+              <div className="text-center py-12 sm:py-16">
+                <p className="text-slate-500 text-sm mb-4 sm:mb-6">向 AI 助手提问关于角色卡创作的任何问题</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto px-2">
                   {quickPrompts.map((hint) => (
                     <button
                       key={hint}
@@ -288,7 +322,7 @@ export function DialogueCreator() {
 
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+                <div className={`max-w-[90%] sm:max-w-[85%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm whitespace-pre-wrap leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-indigo-600 text-white'
                     : 'bg-slate-800 border border-slate-700 text-slate-200'
@@ -300,7 +334,7 @@ export function DialogueCreator() {
 
             {isStreaming && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm bg-slate-800 border border-slate-700 text-slate-200 whitespace-pre-wrap leading-relaxed">
+                <div className="max-w-[90%] sm:max-w-[85%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm bg-slate-800 border border-slate-700 text-slate-200 whitespace-pre-wrap leading-relaxed">
                   {streamingText || <span className="text-slate-400 animate-pulse">思考中...</span>}
                 </div>
               </div>
@@ -310,13 +344,13 @@ export function DialogueCreator() {
           </div>
 
           {/* Input */}
-          <div className="shrink-0 border-t border-slate-700 px-4 py-3">
+          <div className="shrink-0 border-t border-slate-700 px-3 sm:px-4 py-2.5 sm:py-3">
             <div className="flex gap-2 items-end">
               <textarea
                 ref={(el) => { textareaRef(el); (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el; }}
-                className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm text-slate-100
+                className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 text-sm text-slate-100
                   placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500
-                  resize-none min-h-[42px] max-h-[200px]"
+                  resize-none min-h-[38px] sm:min-h-[42px] max-h-[160px]"
                 value={inputValue}
                 onChange={(e) => {
                   setInputValue(e.target.value);
@@ -331,7 +365,7 @@ export function DialogueCreator() {
                 onClick={handleSend}
                 disabled={!inputValue.trim() || isStreaming}
               >
-                {isStreaming ? '生成中...' : '发送'}
+                {isStreaming ? '...' : '发送'}
               </Button>
             </div>
           </div>

@@ -106,7 +106,7 @@ export function SettingsPage() {
 
   if (!settings) {
     return (
-      <div className="animate-fade-in flex items-center justify-center h-[calc(100vh-4rem)]">
+      <div className="animate-fade-in flex items-center justify-center h-[calc(100dvh-4rem)]">
         <p className="text-slate-400">加载中...</p>
       </div>
     );

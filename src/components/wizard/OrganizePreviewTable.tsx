@@ -31,7 +31,7 @@ export function OrganizePreviewTable({
           <Button size="sm" variant="ghost" onClick={onDismiss}>取消</Button>
         </div>
       </div>
-      <div className="max-h-[240px] overflow-y-auto">
+      <div className="max-h-[240px] overflow-y-auto overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-slate-400 border-b border-slate-700/50">

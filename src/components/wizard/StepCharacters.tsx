@@ -77,7 +77,7 @@ export function StepCharacters({
         <p className="text-xs text-indigo-300 leading-relaxed">
           <span className="font-semibold">写作规则（参考 tavern-cards 方法论）：</span>
         </p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1.5 text-[11px] text-indigo-300/80">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-1.5 text-[11px] text-indigo-300/80">
           <p>✦ <strong>一句一意</strong>：写完一个态度就停，不补述同一件事</p>
           <p>✦ <strong>数据库格式</strong>：用列表和键值对，不用散文段落</p>
           <p>✦ <strong>行为展现性格</strong>：写具体行为，不贴抽象标签</p>
