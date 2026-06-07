@@ -9,7 +9,8 @@ export function BackgroundChanger({ sidebarOpen }: { sidebarOpen?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // 移动端关闭侧栏时，自动收起背景面板
-  const effectiveExpanded = sidebarOpen === false ? false : isExpanded;
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+  const effectiveExpanded = isMobile && sidebarOpen === false ? false : isExpanded;
 
   const handleUpload = async () => {
     const input = document.createElement('input');

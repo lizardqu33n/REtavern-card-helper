@@ -22,7 +22,8 @@ export function ThemeSettings({ sidebarOpen }: { sidebarOpen?: boolean }) {
   const [sectionText, setSectionText] = useState(false);
 
   // 移动端关闭侧栏时，自动收起外观面板
-  const effectiveExpanded = sidebarOpen === false ? false : isExpanded;
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+  const effectiveExpanded = isMobile && sidebarOpen === false ? false : isExpanded;
   const [settings, setSettings] = useState<ThemeSettingsType>(() => getThemeSettings());
 
   const handleUpdate = (patch: Partial<ThemeSettingsType>) => {
