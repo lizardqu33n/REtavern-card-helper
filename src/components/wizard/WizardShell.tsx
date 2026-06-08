@@ -16,10 +16,12 @@ interface WizardShellProps {
   saving: boolean;
   /** Optional extra action buttons rendered next to "下一步" */
   extraActions?: React.ReactNode;
+  /** Hide the bottom navigation bar (used when step renders its own nav) */
+  hideBottomNav?: boolean;
   children: React.ReactNode;
 }
 
-export function WizardShell({ currentStep, onPrev, onNext, onSave, stepError, saving, extraActions, children }: WizardShellProps) {
+export function WizardShell({ currentStep, onPrev, onNext, onSave, stepError, saving, extraActions, hideBottomNav, children }: WizardShellProps) {
   const isFirst = currentStep === 1;
   const isLast = currentStep === WIZARD_STEPS.length;
 
@@ -83,6 +85,7 @@ export function WizardShell({ currentStep, onPrev, onNext, onSave, stepError, sa
       )}
 
       {/* Navigation buttons */}
+      {!hideBottomNav && (
       <div className="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-between gap-3 border-t border-white/5 pt-4 sm:pt-6">
         <Button variant="ghost" onClick={onPrev} disabled={isFirst}>
           ← 上一步
@@ -100,6 +103,15 @@ export function WizardShell({ currentStep, onPrev, onNext, onSave, stepError, sa
           )}
         </div>
       </div>
+      )}
+      {/* When bottom nav is hidden, still show "上一步" at the bottom */}
+      {hideBottomNav && (
+      <div className="mt-4 sm:mt-8 flex justify-start border-t border-white/5 pt-4 sm:pt-6">
+        <Button variant="ghost" onClick={onPrev} disabled={isFirst}>
+          ← 上一步
+        </Button>
+      </div>
+      )}
     </div>
   );
 }

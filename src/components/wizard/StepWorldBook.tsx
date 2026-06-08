@@ -24,9 +24,11 @@ interface StepWorldBookProps {
   characterSummaries: string;
   existingWorldbookContext: string;
   onUpdate: (entries: LorebookEntry[]) => void;
+  /** Called when user clicks "下一步" (rendered inline with other action buttons) */
+  onNext?: () => void;
 }
 
-export function StepWorldBook({ entries, cardName, characterSummaries, existingWorldbookContext, onUpdate }: StepWorldBookProps) {
+export function StepWorldBook({ entries, cardName, characterSummaries, existingWorldbookContext, onUpdate, onNext }: StepWorldBookProps) {
   const [generating, setGenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [worldRules, setWorldRules] = useState('');
@@ -46,8 +48,22 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
   const [searchQuery, setSearchQuery] = useState('');
   // AI expand state
   const [expandingIndex, setExpandingIndex] = useState<number | null>(null);
+  // Collapse state: Set of collapsed entry IDs
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const { generateLorebookParsed, generateLorebookSkeleton, organizeEntries, generateEntryKeys, expandLorebookEntry } = useAIGenerate();
   const { addToast } = useToast();
+
+  const toggleCollapse = (id: string) => {
+    setCollapsedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const collapseAll = () => setCollapsedIds(new Set(entries.map(e => e.id)));
+  const expandAll = () => setCollapsedIds(new Set());
+  const allCollapsed = entries.length > 0 && entries.every(e => collapsedIds.has(e.id));
 
   const addEntry = () => {
     onUpdate([...entries, createEmptyLorebookEntry()]);
@@ -103,6 +119,12 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
         })) as LorebookEntry[];
 
         onUpdate([...entries, ...newEntries]);
+        // Auto-collapse newly generated entries
+        setCollapsedIds(prev => {
+          const next = new Set(prev);
+          newEntries.forEach(e => next.add(e.id));
+          return next;
+        });
         addToast('success', `已生成 ${newEntries.length} 条骨架，点击「✨ AI 展开」逐条扩展`);
       } else {
         // ── Full mode: original behavior ──
@@ -139,6 +161,12 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
             } as LorebookEntry;
           });
           onUpdate([...entries, ...newEntries]);
+          // Auto-collapse newly generated entries
+          setCollapsedIds(prev => {
+            const next = new Set(prev);
+            newEntries.forEach(e => next.add(e.id));
+            return next;
+          });
         }
       }
     } catch (err: unknown) {
@@ -343,6 +371,9 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
             <Button variant="ghost" size="sm" onClick={enableAllEntries}>全部启用</Button>
             <Button variant="ghost" size="sm" onClick={disableEmptyKeyEntries}>禁用无触发词</Button>
             <Button variant="ghost" size="sm" onClick={cleanupEmptyEntries}>清理空条目</Button>
+            <Button variant="ghost" size="sm" onClick={allCollapsed ? expandAll : collapseAll}>
+              {allCollapsed ? '📖 全部展开' : '📕 全部折叠'}
+            </Button>
           </div>
           {searchQuery && (
             <p className="text-[11px] text-slate-500">搜索结果：{visibleEntries.length} / {entries.length}</p>
@@ -395,6 +426,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={addEntry}>+ 添加条目</Button>
           <button
             onClick={() => setShowAiPanel(!showAiPanel)}
             disabled={generating}
@@ -406,7 +438,6 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
           >
             {showAiPanel ? '收起' : '✨ AI 生成'}
           </button>
-          <Button variant="secondary" onClick={addEntry}>+ 添加条目</Button>
         </div>
       </div>
 
@@ -444,6 +475,8 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
                 index={index}
                 onUpdate={updateEntry}
                 onRemove={removeEntry}
+                collapsed={collapsedIds.has(entry.id)}
+                onToggleCollapse={() => toggleCollapse(entry.id)}
               />
               {/* AI Expand button — shows on skeletons */}
               {isSkeleton && (
@@ -486,6 +519,17 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
           </svg>
           AI 生成
         </Button>
+        {onNext && (
+          <Button
+            onClick={onNext}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200 hover:scale-105 active:scale-95"
+          >
+            下一步
+            <svg className="w-4 h-4 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -307,6 +307,7 @@ ${e.content}`)
             characterSummaries={characterSummaries}
             existingWorldbookContext={worldbookContext}
             onUpdate={(entries) => updateDraft({ lorebookEntries: entries })}
+            onNext={handleNext}
           />
         );
       case 4:

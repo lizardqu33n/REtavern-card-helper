@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Download, Sparkles, BookMarked } from 'lucide-react';
 import { Button } from '../components/shared/Button';
@@ -60,6 +60,27 @@ export function NovelAnalysisPage() {
   const [error, setError] = useState('');
   const [streamingText, setStreamingText] = useState('');
   const [progressPercent, setProgressPercent] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const streamPanelRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-scroll streaming text to bottom
+  useEffect(() => {
+    if (streamPanelRef.current) {
+      streamPanelRef.current.scrollTop = streamPanelRef.current.scrollHeight;
+    }
+  }, [streamingText]);
+
+  // Elapsed timer during analysis
+  useEffect(() => {
+    if (loading) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [loading]);
 
   const totalChars = useMemo(() => text.trim().length, [text]);
   const outputMaxTokens = useMemo(() => getTokenModeValue(tokenMode, customOutputTokens), [tokenMode, customOutputTokens]);
@@ -230,32 +251,76 @@ export function NovelAnalysisPage() {
             </div>
           )}
 
-          {/* Streaming Progress Bar — "创作者无法介入" */}
+          {/* Streaming Monitoring Panel — “创作者无法介入” read-only dashboard */}
           {loading && (
-            <div className="rounded-xl border border-amber-700/40 bg-amber-950/20 p-4 animate-fade-in">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-amber-300">
-                  <Sparkles size={14} className="inline mr-1" />
-                  AI 正在分析中...
-                </span>
-                <span className="text-xs text-amber-400">{progressPercent}%</span>
+            <div className="rounded-xl border-2 border-amber-600/50 bg-gradient-to-b from-amber-950/30 to-slate-950/60 overflow-hidden animate-fade-in">
+              {/* Header bar */}
+              <div className="flex items-center justify-between px-4 py-3 bg-amber-900/30 border-b border-amber-700/40">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                  <span className="text-sm font-bold text-amber-200">
+                    <Sparkles size={14} className="inline mr-1" />
+                    AI 正在结构化分析中
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-amber-300/80 font-mono">
+                    ⏱ {Math.floor(elapsedSeconds / 60).toString().padStart(2, '0')}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
+                  </span>
+                  <span className="text-amber-300/80 font-mono">
+                    {streamingText.length} 字
+                  </span>
+                  <span className="text-amber-300 font-bold text-sm">
+                    {progressPercent}%
+                  </span>
+                </div>
               </div>
+          
               {/* Progress bar */}
-              <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+              <div className="px-4 pt-3">
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800/80 shadow-inner">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-500 transition-all duration-500 ease-out relative"
+                    style={{ width: `${Math.max(progressPercent, 2)}%` }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex justify-between mt-1 text-[10px] text-slate-500">
+                  <span>开始</span>
+                  <span>≈{Math.round(outputMaxTokens * 2).toLocaleString()} 字</span>
+                  <span>完成</span>
+                </div>
+              </div>
+          
+              {/* Streaming text preview — auto-scrolling */}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-medium text-slate-400">实时输出流</span>
+                  <span className="text-[10px] text-slate-600">自动滚动 · 只读</span>
+                </div>
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300 ease-out"
-                  style={{ width: `${progressPercent}%` }}
-                />
+                  ref={streamPanelRef}
+                  className="h-56 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-950/70 p-3 scrollbar-thin scrollbar-thumb-slate-700"
+                >
+                  <pre className="whitespace-pre-wrap text-xs text-slate-300 leading-relaxed font-mono selection:bg-amber-500/30">
+                    {streamingText || '等待 AI 响应...'}
+                  </pre>
+                  {streamingText && (
+                    <span className="inline-block w-2 h-4 bg-amber-400/80 animate-pulse ml-0.5 align-middle" />
+                  )}
+                </div>
               </div>
-              {/* Streaming text preview */}
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-950/50 p-3">
-                <pre className="whitespace-pre-wrap text-xs text-slate-400 leading-relaxed font-mono">
-                  {streamingText || '等待 AI 响应...'}
-                </pre>
+          
+              {/* Footer — “创作者无法介入” */}
+              <div className="px-4 py-2.5 bg-slate-900/50 border-t border-slate-700/30 text-center">
+                <p className="text-[11px] text-amber-500/80">
+                  🚫 <strong>创作者无法介入</strong> — AI 正在生成结构化世界书分析，请勿操作，耐心等待完成
+                </p>
               </div>
-              <p className="mt-2 text-center text-[11px] text-amber-500/70 italic">
-                ⚠ 创作者无法介入 — AI 正在生成结构化分析，请耐心等待
-              </p>
             </div>
           )}
 

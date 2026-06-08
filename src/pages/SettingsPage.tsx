@@ -250,12 +250,13 @@ export function SettingsPage() {
             <input
               type="number"
               min={100}
-              max={32000}
+              max={200000}
               step={100}
               value={settings.maxTokens}
               onChange={(e) => setSettings({ ...settings, maxTokens: parseInt(e.target.value) || 2000 })}
               className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 w-full"
             />
+            <p className="text-[10px] text-slate-500">按所选模型支持填写，上限放宽到 300000</p>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-300">

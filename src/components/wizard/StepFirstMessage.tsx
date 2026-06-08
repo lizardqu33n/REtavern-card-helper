@@ -12,6 +12,7 @@ interface StepFirstMessageProps {
   firstMessage: string;
   cardName: string;
   characterDescriptions: string;
+  worldbookContext: string;
   onChange: (message: string) => void;
 }
 
@@ -23,7 +24,7 @@ const WORD_COUNT_PRESETS = [
   { label: '1200 字', value: 1200 },
 ];
 
-export function StepFirstMessage({ firstMessage, cardName, characterDescriptions, onChange }: StepFirstMessageProps) {
+export function StepFirstMessage({ firstMessage, cardName, characterDescriptions, worldbookContext, onChange }: StepFirstMessageProps) {
   const { generateFirstMessageStreaming } = useAIGenerate();
   const [aiStatus, setAiStatus] = useState<AIProgressStatus>('idle');
   const [aiText, setAiText] = useState('');
@@ -46,6 +47,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
           setAiText((prev) => prev + chunk);
         },
         targetWordCount || undefined,
+        worldbookContext,
       );
       setAiStatus('done');
       setPendingResult(fullText);
@@ -53,7 +55,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
       setAiStatus('error');
       setAiError(err instanceof Error ? err.message : '生成失败');
     }
-  }, [cardName, characterDescriptions, generateFirstMessageStreaming, targetWordCount]);
+  }, [cardName, characterDescriptions, generateFirstMessageStreaming, targetWordCount, worldbookContext]);
 
   const handleAccept = useCallback(() => {
     if (pendingResult) {

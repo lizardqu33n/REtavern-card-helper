@@ -35,22 +35,32 @@ interface LorebookEntryEditorProps {
   index: number;
   onUpdate: (index: number, updates: Partial<LorebookEntry>) => void;
   onRemove: (index: number) => void;
+  /** Whether the entry body is collapsed (only header visible) */
+  collapsed?: boolean;
+  /** Toggle collapse state */
+  onToggleCollapse?: () => void;
 }
 
-export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: LorebookEntryEditorProps) {
+export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, collapsed, onToggleCollapse }: LorebookEntryEditorProps) {
   const badge = getStrategyBadge(entry);
   const fieldCls = 'w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200';
   const labelCls = 'text-xs text-slate-400';
   const hintCls = 'text-[10px] text-slate-500 mt-0.5';
 
   return (
-    <div className={`rounded-xl border bg-slate-800/50 p-4 space-y-3 ${
+    <div className={`rounded-xl border bg-slate-800/50 overflow-hidden ${
       !entry.enabled ? 'border-slate-700/50 opacity-50' :
       entry.constant ? 'border-amber-700/60' : 'border-slate-700'
     }`}>
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2">
+      {/* ── Header (always visible, clickable to toggle) ────────────── */}
+      <div
+        className={`flex items-center justify-between gap-2 px-4 py-3 ${collapsed !== undefined ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+        onClick={collapsed !== undefined ? onToggleCollapse : undefined}
+      >
         <div className="flex items-center gap-2 min-w-0">
+          {collapsed !== undefined && (
+            <span className="text-xs text-slate-500 shrink-0 transition-transform duration-200" style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+          )}
           <span className="text-base">{badge.icon}</span>
           <h3 className="text-sm font-semibold text-white truncate">
             {entry.name || `条目 ${index + 1}`}
@@ -61,8 +71,18 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
           <span className="text-[10px] text-slate-600 font-mono shrink-0">
             {entry.position}
           </span>
+          {collapsed && entry.keys.length > 0 && (
+            <span className="text-[10px] text-slate-500 truncate max-w-[120px] shrink-0">
+              {entry.keys.slice(0, 3).join(', ')}{entry.keys.length > 3 ? '...' : ''}
+            </span>
+          )}
+          {collapsed && entry.content && (
+            <span className="text-[10px] text-slate-600 shrink-0">
+              {entry.content.length}字
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           <label className="flex items-center gap-1 text-xs text-slate-400">
             <input type="checkbox" checked={entry.enabled}
               onChange={(e) => onUpdate(index, { enabled: e.target.checked })}
@@ -72,6 +92,10 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
           <Button variant="danger" size="sm" onClick={() => onRemove(index)}>×</Button>
         </div>
       </div>
+
+      {/* ── Body (hidden when collapsed) ────────────────────────────── */}
+      {!collapsed && (
+      <div className="px-4 pb-4 space-y-3 border-t border-slate-700/30 pt-3">
 
       {/* ── Section 1: 标题 + 触发策略 + 关键词 + 内容 ─────── */}
       <div className="grid grid-cols-[1fr,auto] gap-3">
@@ -312,6 +336,8 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove }: Lorebo
           </div>
         </div>
       </details>
+      </div>
+      )}
     </div>
   );
 }
