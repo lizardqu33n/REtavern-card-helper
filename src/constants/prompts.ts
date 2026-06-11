@@ -278,7 +278,7 @@ ${characterContext ? `\n【角色上下文】：\n${characterContext.substring(0
  * First message generation prompt (Step 4).
  * Generates an opening message for the character.
  */
-export const FIRST_MESSAGE_PROMPT = (cardName: string, characterDescriptions: string, sceneHint: string, targetWordCount?: number, worldbookContext?: string) => {
+export const FIRST_MESSAGE_PROMPT = (cardName: string, characterDescriptions: string, sceneHint: string, targetWordCount?: number, worldbookContext?: string, writingRequirements?: string) => {
   const lengthInstruction = targetWordCount
     ? `字数控制在 ${targetWordCount} 字左右（允许上下浮动 10%）。`
     : '至少写 500 字以上，内容越丰富越好。';
@@ -290,7 +290,7 @@ export const FIRST_MESSAGE_PROMPT = (cardName: string, characterDescriptions: st
 1. **篇幅要求**：${lengthInstruction}
 2. **结构要素**：
    - 环境描写：用具体的视觉、听觉、触觉、嗅觉细节建立场景
-   - 角色动作：通过行为展示性格，不要直接说"他很冷漠"，而是写具体行为
+   - 角色动作：通过行为展示性格，不要直接说“他很冷漠”，而是写具体行为
    - 内心独白或对话：展示角色的说话风格和思维方式
    - 钩子结尾：留下悬念或给用户一个明确的回应入口
 
@@ -304,6 +304,7 @@ export const FIRST_MESSAGE_PROMPT = (cardName: string, characterDescriptions: st
    - 不要写得太短、太概括
    - 不要用抽象形容词堆砌
    - 不要一次性把故事讲完，要留有余地
+${writingRequirements ? `\n5. **用户自定义要求**（必须严格遵守）：\n${writingRequirements}` : ''}
 
 请只输出消息正文，不要加引号、标题或其他标签。`,
     user: `为以下角色卡撰写开场白：
@@ -313,7 +314,7 @@ export const FIRST_MESSAGE_PROMPT = (cardName: string, characterDescriptions: st
 ${characterDescriptions || '(暂无角色描述，请自由发挥)'}
 ${worldbookContext ? `\n已有世界书设定（必须严格遵守，开场白不得与其冲突；优先使用其中的人物关系、世界规则、文风、事件和场景设定）：\n${worldbookContext}` : ''}
 ${sceneHint ? `\n场景：${sceneHint}` : ''}
-${targetWordCount ? `\n【重要】字数要求约 ${targetWordCount} 字，请确保内容充实详细。` : '\n【重要】请写长一些，至少 500 字，包含丰富的场景描写和角色互动。'}
+${targetWordCount ? `\n【重要】字数要求约 ${targetWordCount} 字，请确保内容充实详。` : '\n【重要】请写长一些，至少 500 字，包含丰富的场景描写和角色互动。'}
 
 请只输出消息正文。`,
   };

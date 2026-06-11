@@ -1,6 +1,7 @@
 /**
  * Step 4: First Message - the character's opening message.
- * Supports AI generation with real-time streaming progress and word count control.
+ * Supports AI generation with real-time streaming progress, word count control,
+ * custom writing requirements, and empty response detection with auto-retry.
  */
 import { useState, useCallback } from 'react';
 import { TextArea } from '../shared/TextArea';
@@ -24,6 +25,11 @@ const WORD_COUNT_PRESETS = [
   { label: '1200 字', value: 1200 },
 ];
 
+/** Minimum acceptable content length for a valid response */
+const MIN_RESPONSE_LENGTH = 50;
+/** Maximum number of auto-retries when AI returns empty/too-short content */
+const MAX_AUTO_RETRIES = 2;
+
 export function StepFirstMessage({ firstMessage, cardName, characterDescriptions, worldbookContext, onChange }: StepFirstMessageProps) {
   const { generateFirstMessageStreaming } = useAIGenerate();
   const [aiStatus, setAiStatus] = useState<AIProgressStatus>('idle');
@@ -31,8 +37,14 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
   const [aiError, setAiError] = useState<string | null>(null);
   const [pendingResult, setPendingResult] = useState<string | null>(null);
   const [targetWordCount, setTargetWordCount] = useState(0);
+  const [writingRequirements, setWritingRequirements] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const [showRequirements, setShowRequirements] = useState(false);
 
-  const handleStreamGenerate = useCallback(async () => {
+  const handleStreamGenerate = useCallback(async (isRetry = false) => {
+    if (!isRetry) {
+      setRetryCount(0);
+    }
     setAiStatus('generating');
     setAiText('');
     setAiError(null);
@@ -48,14 +60,34 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
         },
         targetWordCount || undefined,
         worldbookContext,
+        writingRequirements || undefined,
       );
+
+      // ── Empty response detection ──────────────────────────────────────
+      const trimmed = fullText.trim();
+      if (trimmed.length < MIN_RESPONSE_LENGTH) {
+        const currentRetry = isRetry ? retryCount + 1 : 1;
+        if (currentRetry <= MAX_AUTO_RETRIES) {
+          // Auto-retry
+          setRetryCount(currentRetry);
+          setAiText(`⚠️ AI 返回内容过短（${trimmed.length} 字），自动重试中 (${currentRetry}/${MAX_AUTO_RETRIES})...\n\n`);
+          setTimeout(() => handleStreamGenerate(true), 800);
+          return;
+        } else {
+          // Exhausted retries
+          setAiStatus('error');
+          setAiError(`AI 连续 ${MAX_AUTO_RETRIES + 1} 次返回空内容或过短内容（${trimmed.length} 字）。请检查：\n1. API 配置是否正确\n2. 模型是否支持当前 token 数量\n3. 角色描述是否为空\n\n你可以尝试：\n- 补充角色描述后重新生成\n- 手动撰写开场白\n- 更换 AI 模型`);
+          return;
+        }
+      }
+
       setAiStatus('done');
       setPendingResult(fullText);
     } catch (err: unknown) {
       setAiStatus('error');
       setAiError(err instanceof Error ? err.message : '生成失败');
     }
-  }, [cardName, characterDescriptions, generateFirstMessageStreaming, targetWordCount, worldbookContext]);
+  }, [cardName, characterDescriptions, generateFirstMessageStreaming, targetWordCount, worldbookContext, writingRequirements, retryCount]);
 
   const handleAccept = useCallback(() => {
     if (pendingResult) {
@@ -77,6 +109,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
     setAiText('');
     setAiError(null);
     setPendingResult(null);
+    setRetryCount(0);
   }, []);
 
   return (
@@ -92,10 +125,20 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
           <Button
             variant="secondary"
             size="sm"
-            onClick={handleStreamGenerate}
+            onClick={() => setShowRequirements(!showRequirements)}
+          >
+            {showRequirements ? '收起要求' : '📝 写作要求'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleStreamGenerate(false)}
             disabled={aiStatus === 'generating'}
           >
-            {aiStatus === 'generating' ? '⏳ 生成中...' : '✨ AI 生成'}
+            {aiStatus === 'generating'
+              ? (retryCount > 0 ? `⏳ 重试中 (${retryCount}/${MAX_AUTO_RETRIES})...` : '⏳ 生成中...')
+              : '✨ AI 生成'
+            }
           </Button>
           {pendingResult && (
             <>
@@ -105,6 +148,25 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
           )}
         </div>
       </div>
+
+      {/* Writing requirements panel */}
+      {showRequirements && (
+        <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-indigo-300">📝 用户写作要求</h3>
+            <span className="text-[10px] text-slate-500">AI 会严格遵守这些要求</span>
+          </div>
+          <textarea
+            value={writingRequirements}
+            onChange={(e) => setWritingRequirements(e.target.value)}
+            placeholder={"例如：\n- 开场白要从角色的视角出发，用第一人称\n- 要有悬念感，结尾留下悬念\n- 场景设定在深夜的酒吧\n- 语气要带点懒漫和不耐烦\n- 要有对话元素，角色对 {{user}} 说话"}
+            className="w-full h-28 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 resize-y focus:border-indigo-500 focus:outline-none"
+          />
+          <p className="text-[11px] text-slate-500">
+            提示：在这里描述你对开场白的具体要求，如场景、语气、必须包含的元素等。AI 会在生成时严格遵守。
+          </p>
+        </div>
+      )}
 
       {/* Word count presets */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -133,7 +195,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
             status={aiStatus}
             text={aiText}
             error={aiError}
-            title="AI 开场白生成"
+            title={retryCount > 0 ? `AI 开场白生成 (重试 ${retryCount}/${MAX_AUTO_RETRIES})` : 'AI 开场白生成'}
             onClear={handleClear}
           />
         </div>

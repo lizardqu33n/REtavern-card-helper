@@ -184,8 +184,9 @@ export function useAIGenerate() {
     onChunk: StreamCallback,
     targetWordCount?: number,
     worldbookContext?: string,
+    writingRequirements?: string,
   ): Promise<string> => {
-    const prompts = FIRST_MESSAGE_PROMPT(cardName, characterDescriptions, sceneHint, targetWordCount, worldbookContext);
+    const prompts = FIRST_MESSAGE_PROMPT(cardName, characterDescriptions, sceneHint, targetWordCount, worldbookContext, writingRequirements);
     const maxTokens = targetWordCount ? Math.max(4000, targetWordCount * 3) : 4000;
     return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.9, max_tokens: maxTokens, presetMode: 'force' });
   }, []);

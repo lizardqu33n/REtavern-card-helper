@@ -23,8 +23,10 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
   const [aiText, setAiText] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [pendingResult, setPendingResult] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  const handleStreamGenerate = useCallback(async () => {
+  const handleStreamGenerate = useCallback(async (isRetry = false) => {
+    if (!isRetry) setRetryCount(0);
     setAiStatus('generating');
     setAiText('');
     setAiError(null);
@@ -39,13 +41,30 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
         },
         existingWorldbookContext,
       );
+
+      // ── Empty response detection ──────────────────────────────────
+      const trimmed = fullText.trim();
+      if (trimmed.length < 30) {
+        const currentRetry = isRetry ? retryCount + 1 : 1;
+        if (currentRetry <= 2) {
+          setRetryCount(currentRetry);
+          setAiText(`⚠️ AI 返回内容过短（${trimmed.length} 字），自动重试中 (${currentRetry}/2)...\n\n`);
+          setTimeout(() => handleStreamGenerate(true), 800);
+          return;
+        } else {
+          setAiStatus('error');
+          setAiError(`AI 连续 3 次返回空内容。请检查 API 配置或角色描述后重试。`);
+          return;
+        }
+      }
+
       setAiStatus('done');
       setPendingResult(fullText);
     } catch (err: unknown) {
       setAiStatus('error');
       setAiError(err instanceof Error ? err.message : '生成失败');
     }
-  }, [cardName, characterDescriptions, existingWorldbookContext, generateExampleDialoguesStreaming]);
+  }, [cardName, characterDescriptions, existingWorldbookContext, generateExampleDialoguesStreaming, retryCount]);
 
   const handleAccept = useCallback(() => {
     if (pendingResult) {
@@ -67,6 +86,7 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
     setAiText('');
     setAiError(null);
     setPendingResult(null);
+    setRetryCount(0);
   }, []);
 
   return (
@@ -82,10 +102,13 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
           <Button
             variant="secondary"
             size="sm"
-            onClick={handleStreamGenerate}
+            onClick={() => handleStreamGenerate(false)}
             disabled={aiStatus === 'generating'}
           >
-            {aiStatus === 'generating' ? '⏳ 生成中...' : '✨ AI 生成'}
+            {aiStatus === 'generating'
+              ? (retryCount > 0 ? `⏳ 重试中 (${retryCount}/2)...` : '⏳ 生成中...')
+              : '✨ AI 生成'
+            }
           </Button>
           {pendingResult && (
             <>
@@ -103,7 +126,7 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
             status={aiStatus}
             text={aiText}
             error={aiError}
-            title="AI 示例对话生成"
+            title={retryCount > 0 ? `AI 示例对话生成 (重试 ${retryCount}/2)` : 'AI 示例对话生成'}
             onClear={handleClear}
           />
         </div>
