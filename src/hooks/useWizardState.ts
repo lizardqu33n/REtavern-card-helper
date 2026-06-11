@@ -5,7 +5,7 @@
  * Drafts are auto-saved to IndexedDB so navigating away and back preserves state.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createEmptyDraft, createEmptyCharacter, WIZARD_STEPS } from '../constants/defaults';
+import { createEmptyDraft, createEmptyCharacter, createEmptyLorebookEntry, WIZARD_STEPS } from '../constants/defaults';
 import type { WizardDraft } from '../constants/defaults';
 import { cardToDraft, assembleCard } from '../services/card-exporter';
 import { db } from '../db/database';
@@ -15,6 +15,38 @@ type DraftState = WizardDraft;
 
 const DRAFT_KEY_NEW = 'new';
 const DRAFT_SAVE_DELAY = 500; // ms
+
+/**
+ * Normalize a loaded draft by merging with defaults.
+ * Handles data from older versions or IndexedDB deserialization where
+ * fields may be missing or undefined.
+ */
+function normalizeDraft(raw: Partial<DraftState>): DraftState {
+  const defaults = createEmptyDraft();
+  const merged: DraftState = {
+    ...defaults,
+    ...raw,
+    // Ensure array fields are always arrays (not undefined from deserialization)
+    characters: (raw.characters ?? defaults.characters).map((c) => ({
+      ...createEmptyCharacter(),
+      ...c,
+      name: c.name ?? '',
+      description: c.description ?? '',
+    })),
+    lorebookEntries: (raw.lorebookEntries ?? defaults.lorebookEntries).map((e) => ({
+      ...createEmptyLorebookEntry(),
+      ...e,
+      content: e.content ?? '',
+      name: e.name ?? '',
+      keys: e.keys ?? [],
+      secondary_keys: e.secondary_keys ?? [],
+    })),
+    tags: raw.tags ?? defaults.tags,
+    alternate_greetings: raw.alternate_greetings ?? defaults.alternate_greetings,
+    mvu: { ...defaults.mvu, ...(raw.mvu ?? {}) },
+  };
+  return merged;
+}
 
 export function useWizardState(editId?: number) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -38,13 +70,13 @@ export function useWizardState(editId?: number) {
           const card = await db.cards.get(editId);
           if (card) {
             const restored = cardToDraft(card as unknown as Record<string, unknown>);
-            setDraft(restored);
+            setDraft(normalizeDraft(restored));
           }
         } else {
           // New card mode — try restoring unsaved draft
           const saved = await db.wizard_drafts.get(DRAFT_KEY_NEW);
           if (saved) {
-            setDraft(saved.data as DraftState);
+            setDraft(normalizeDraft(saved.data as Partial<DraftState>));
             setCurrentStep(saved.currentStep || 1);
           }
         }
