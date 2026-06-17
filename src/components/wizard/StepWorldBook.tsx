@@ -34,7 +34,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
   const [worldRules, setWorldRules] = useState('');
   // Skeleton mode
   const [skeletonMode, setSkeletonMode] = useState(false);
-  const [skeletonCount, setSkeletonCount] = useState(6);
+  const [skeletonCount, setSkeletonCount] = useState(8);
   // AI organize state
   const [organizing, setOrganizing] = useState(false);
   const [organizeResults, setOrganizeResults] = useState<AIOrganizeSuggestion[] | null>(null);
