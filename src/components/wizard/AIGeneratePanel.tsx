@@ -12,10 +12,12 @@ interface AIGeneratePanelProps {
   generating: boolean;
   skeletonMode: boolean;
   skeletonCount: number;
+  batchCount: number;
   onTopicChange: (topic: string) => void;
   onWorldRulesChange: (rules: string) => void;
   onSkeletonModeChange: (skeleton: boolean) => void;
   onSkeletonCountChange: (count: number) => void;
+  onBatchCountChange: (count: number) => void;
   onGenerate: () => void;
   /** Whether NSFW content generation is allowed */
   nsfw?: boolean;
@@ -28,10 +30,12 @@ export function AIGeneratePanel({
   generating,
   skeletonMode,
   skeletonCount,
+  batchCount,
   onTopicChange,
   onWorldRulesChange,
   onSkeletonModeChange,
   onSkeletonCountChange,
+  onBatchCountChange,
   onGenerate,
   nsfw,
   onNsfwChange,
@@ -115,6 +119,37 @@ export function AIGeneratePanel({
           </div>
         )}
       </div>
+
+      {/* ── Full mode batch count ──────────────────── */}
+      {!skeletonMode && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-indigo-300 shrink-0">生成条数</span>
+          <input
+            type="number"
+            value={batchCount}
+            min={3}
+            max={20}
+            onChange={(e) => onBatchCountChange(Math.max(3, Math.min(20, parseInt(e.target.value) || 8)))}
+            className="w-14 text-center rounded border border-indigo-600/40 bg-slate-800 px-2 py-1 text-sm font-semibold text-indigo-300"
+          />
+          <div className="flex gap-1.5">
+            {[4, 8, 12, 16].map((n) => (
+              <button
+                key={n}
+                onClick={() => onBatchCountChange(n)}
+                className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                  batchCount === n
+                    ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                    : 'border-slate-600 bg-slate-700/50 text-slate-400 hover:border-indigo-600 hover:text-indigo-400'
+                }`}
+              >
+                {n}条
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <label className="text-sm font-medium text-indigo-300">
           世界观约束与运行规则

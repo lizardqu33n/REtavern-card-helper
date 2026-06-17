@@ -3,7 +3,7 @@
  * Shows the AI how the character speaks. Uses <START>, {{user}}, and actual character names.
  * Supports AI generation with real-time streaming progress.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { TextArea } from '../shared/TextArea';
 import { Button } from '../shared/Button';
 import { AIProgressPanel, type AIProgressStatus } from '../shared/AIProgressPanel';
@@ -25,6 +25,12 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
   const [pendingResult, setPendingResult] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up pending retry timeout on unmount
+  useEffect(() => () => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+  }, []);
 
   const handleStreamGenerate = useCallback(async (isRetry = false) => {
     if (!isRetry) {
@@ -54,7 +60,7 @@ export function StepExampleDialogues({ exampleDialogues, cardName, characterDesc
         setRetryCount(currentRetry);
         if (currentRetry <= 2) {
           setAiText(`⚠️ AI 返回内容过短（${trimmed.length} 字），自动重试中 (${currentRetry}/2)...\n\n`);
-          setTimeout(() => handleStreamGenerate(true), 1000);
+          retryTimeoutRef.current = setTimeout(() => handleStreamGenerate(true), 1000);
           return;
         } else {
           setAiStatus('error');

@@ -283,6 +283,8 @@ ${e.content || ''}`)
           addToCharacterHistory(char.id, newDesc, false);
           // Update character description
           updateCharacter(index, { description: newDesc });
+          // Sync linked world book entries immediately so the preview stays current
+          injectCharacterEntries();
           addToast('success', `${char.name} 生成完成`);
         } else {
           console.warn(`[生成] ${char.name} AI 返回内容为空或过短:`, parsed.description);

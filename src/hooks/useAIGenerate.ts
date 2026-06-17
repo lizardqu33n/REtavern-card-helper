@@ -205,8 +205,8 @@ export function useAIGenerate() {
    * Generate lorebook entries in batch.
    * @returns Raw text response
    */
-  const generateLorebook = useCallback(async (cardName: string, characterSummaries: string, topic: string, rules?: string, nsfw?: boolean): Promise<string> => {
-    const prompts = LOREBOOK_GENERATE_PROMPT(cardName, characterSummaries, topic, rules, nsfw);
+  const generateLorebook = useCallback(async (cardName: string, characterSummaries: string, topic: string, batchCount: number, rules?: string, nsfw?: boolean): Promise<string> => {
+    const prompts = LOREBOOK_GENERATE_PROMPT(cardName, characterSummaries, topic, batchCount, rules, nsfw);
     return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.8, max_tokens: 16000, presetMode: 'force' });
   }, []);
 
@@ -217,11 +217,12 @@ export function useAIGenerate() {
     cardName: string,
     characterSummaries: string,
     topic: string,
+    batchCount: number,
     onChunk: StreamCallback,
     rules?: string,
     nsfw?: boolean,
   ): Promise<string> => {
-    const prompts = LOREBOOK_GENERATE_PROMPT(cardName, characterSummaries, topic, rules, nsfw);
+    const prompts = LOREBOOK_GENERATE_PROMPT(cardName, characterSummaries, topic, batchCount, rules, nsfw);
     return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.8, max_tokens: 16000, presetMode: 'force' });
   }, []);
 
@@ -229,8 +230,8 @@ export function useAIGenerate() {
    * Generate lorebook entries and parse as JSON array.
    * Returns entries with all V2 spec + SillyTavern runtime fields.
    */
-  const generateLorebookParsed = useCallback(async (cardName: string, characterSummaries: string, topic: string, rules?: string, nsfw?: boolean) => {
-    const text = await generateLorebook(cardName, characterSummaries, topic, rules, nsfw);
+  const generateLorebookParsed = useCallback(async (cardName: string, characterSummaries: string, topic: string, batchCount: number, rules?: string, nsfw?: boolean) => {
+    const text = await generateLorebook(cardName, characterSummaries, topic, batchCount, rules, nsfw);
     const parsed = parseAIJson(text) as AIGeneratedLorebookEntry[] | null;
     return parsed || [];
   }, [generateLorebook]);
@@ -242,11 +243,12 @@ export function useAIGenerate() {
     cardName: string,
     characterSummaries: string,
     topic: string,
+    batchCount: number,
     onChunk: StreamCallback,
     rules?: string,
     nsfw?: boolean,
   ) => {
-    const text = await generateLorebookStreaming(cardName, characterSummaries, topic, onChunk, rules, nsfw);
+    const text = await generateLorebookStreaming(cardName, characterSummaries, topic, batchCount, onChunk, rules, nsfw);
     const parsed = parseAIJson(text) as AIGeneratedLorebookEntry[] | null;
     return parsed || [];
   }, [generateLorebookStreaming]);

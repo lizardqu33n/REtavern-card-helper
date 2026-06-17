@@ -36,6 +36,8 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
   // Skeleton mode
   const [skeletonMode, setSkeletonMode] = useState(false);
   const [skeletonCount, setSkeletonCount] = useState(8);
+  // Full mode batch count
+  const [batchCount, setBatchCount] = useState(8);
   // AI organize state
   const [organizing, setOrganizing] = useState(false);
   const [organizeResults, setOrganizeResults] = useState<AIOrganizeSuggestion[] | null>(null);
@@ -155,7 +157,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
       } else {
         // ── Full mode: streaming with live preview ──
         const result = await generateLorebookParsedStreaming(
-          cardName, characterSummaries, topic,
+          cardName, characterSummaries, topic, batchCount,
           (_chunk, fullText) => setStreamText(fullText),
           consistencyRules || undefined, nsfw,
         );
@@ -471,8 +473,10 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
         onWorldRulesChange={setWorldRules}
         skeletonMode={skeletonMode}
         skeletonCount={skeletonCount}
+        batchCount={batchCount}
         onSkeletonModeChange={setSkeletonMode}
         onSkeletonCountChange={setSkeletonCount}
+        onBatchCountChange={setBatchCount}
         onGenerate={handleBatchGenerate}
         nsfw={nsfw}
         onNsfwChange={onNsfwChange}

@@ -3,7 +3,7 @@
  * Supports AI generation with real-time streaming progress, word count control,
  * custom writing requirements, and empty response detection with auto-retry.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { TextArea } from '../shared/TextArea';
 import { Button } from '../shared/Button';
 import { AIProgressPanel, type AIProgressStatus } from '../shared/AIProgressPanel';
@@ -40,7 +40,13 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
   const [writingRequirements, setWritingRequirements] = useState('');
   const [retryCount, setRetryCount] = useState(0);
   const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showRequirements, setShowRequirements] = useState(false);
+
+  // Clean up pending retry timeout on unmount
+  useEffect(() => () => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+  }, []);
 
   const handleStreamGenerate = useCallback(async (isRetry = false) => {
     if (!isRetry) {
@@ -74,7 +80,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
         if (currentRetry <= MAX_AUTO_RETRIES) {
           // Auto-retry
           setAiText(`⚠️ AI 返回内容过短（${trimmed.length} 字），自动重试中 (${currentRetry}/${MAX_AUTO_RETRIES})...\n\n`);
-          setTimeout(() => handleStreamGenerate(true), 1000);
+          retryTimeoutRef.current = setTimeout(() => handleStreamGenerate(true), 1000);
           return;
         } else {
           // Exhausted retries
