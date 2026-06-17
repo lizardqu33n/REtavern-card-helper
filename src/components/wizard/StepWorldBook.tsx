@@ -471,6 +471,9 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
         generating={generating}
         onTopicChange={setTopic}
         onWorldRulesChange={setWorldRules}
+        cardName={cardName}
+        characterSummaries={characterSummaries}
+        existingWorldbookContext={existingWorldbookContext}
         skeletonMode={skeletonMode}
         skeletonCount={skeletonCount}
         batchCount={batchCount}

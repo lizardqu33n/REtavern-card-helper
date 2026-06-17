@@ -2,9 +2,12 @@
  * AIGeneratePanel - Always-visible panel for AI batch world book generation.
  * Contains theme, skeleton mode, world rules, NSFW toggle, and generate button.
  */
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { TextInput } from '../shared/TextInput';
 import { TextArea } from '../shared/TextArea';
 import { Button } from '../shared/Button';
+import { AIProgressPanel, type AIProgressStatus } from '../shared/AIProgressPanel';
+import { useAIGenerate } from '../../hooks/useAIGenerate';
 
 interface AIGeneratePanelProps {
   topic: string;
@@ -22,6 +25,12 @@ interface AIGeneratePanelProps {
   /** Whether NSFW content generation is allowed */
   nsfw?: boolean;
   onNsfwChange?: (nsfw: boolean) => void;
+  /** Card name, used for AI rule generation */
+  cardName?: string;
+  /** Character summaries, used for AI rule generation */
+  characterSummaries?: string;
+  /** Existing world book entries context, used to keep rules consistent */
+  existingWorldbookContext?: string;
 }
 
 export function AIGeneratePanel({
@@ -39,7 +48,96 @@ export function AIGeneratePanel({
   onGenerate,
   nsfw,
   onNsfwChange,
+  cardName,
+  characterSummaries,
+  existingWorldbookContext,
 }: AIGeneratePanelProps) {
+  const { generateWorldRulesStreaming } = useAIGenerate();
+  const [rulesStatus, setRulesStatus] = useState<AIProgressStatus>('idle');
+  const [rulesText, setRulesText] = useState('');
+  const [rulesError, setRulesError] = useState<string | null>(null);
+  const [pendingRules, setPendingRules] = useState<string | null>(null);
+  const rulesRetryCountRef = useRef(0);
+  const rulesRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up pending retry timeout on unmount
+  useEffect(() => () => {
+    if (rulesRetryTimeoutRef.current) clearTimeout(rulesRetryTimeoutRef.current);
+  }, []);
+
+  const canGenerateRules = !!cardName?.trim();
+
+  const handleGenerateRules = useCallback(async (isRetry = false) => {
+    if (!canGenerateRules) {
+      setRulesError('请先填写卡片名称');
+      return;
+    }
+    if (!isRetry) {
+      rulesRetryCountRef.current = 0;
+    }
+    setRulesStatus('generating');
+    setRulesText('');
+    setRulesError(null);
+    setPendingRules(null);
+
+    try {
+      const fullText = await generateWorldRulesStreaming(
+        cardName || '',
+        characterSummaries || '',
+        (chunk) => setRulesText((prev) => prev + chunk),
+        topic || undefined,
+        worldRules || undefined,
+        existingWorldbookContext || undefined,
+        nsfw,
+      );
+
+      // ── Empty/too-short response detection ─────────────────────────────
+      const trimmed = fullText.trim();
+      if (trimmed.length < 20) {
+        rulesRetryCountRef.current = isRetry ? rulesRetryCountRef.current + 1 : 1;
+        const currentRetry = rulesRetryCountRef.current;
+        if (currentRetry <= 2) {
+          setRulesText(`⚠️ AI 返回规则过短（${trimmed.length} 字），自动重试中 (${currentRetry}/2)...\n\n`);
+          rulesRetryTimeoutRef.current = setTimeout(() => handleGenerateRules(true), 1000);
+          return;
+        } else {
+          setRulesStatus('error');
+          setRulesError('AI 连续 3 次返回空内容或过短的规则。请检查 API 配置或主题描述后重试。');
+          return;
+        }
+      }
+
+      setRulesStatus('done');
+      setPendingRules(fullText);
+    } catch (err: unknown) {
+      setRulesStatus('error');
+      setRulesError(err instanceof Error ? err.message : '生成失败');
+    }
+  }, [canGenerateRules, cardName, characterSummaries, topic, worldRules, existingWorldbookContext, nsfw, generateWorldRulesStreaming]);
+
+  const handleAcceptRules = useCallback(() => {
+    if (pendingRules) {
+      onWorldRulesChange(pendingRules);
+      setPendingRules(null);
+    }
+    setRulesStatus('idle');
+    setRulesText('');
+  }, [pendingRules, onWorldRulesChange]);
+
+  const handleRejectRules = useCallback(() => {
+    setPendingRules(null);
+    setRulesStatus('idle');
+    setRulesText('');
+  }, []);
+
+  const handleClearRules = useCallback(() => {
+    setRulesStatus('idle');
+    setRulesText('');
+    setRulesError(null);
+    setPendingRules(null);
+    rulesRetryCountRef.current = 0;
+  }, []);
+
   return (
     <div className="mb-6 rounded-xl border border-indigo-700/40 bg-indigo-950/30 p-4 space-y-3">
       {/* NSFW toggle */}
@@ -151,10 +249,47 @@ export function AIGeneratePanel({
       )}
 
       <div>
-        <label className="text-sm font-medium text-indigo-300">
-          世界观约束与运行规则
-          <span className="text-xs text-slate-500 font-normal ml-2">（可选，定义世界法则、扮演规则等）</span>
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-indigo-300">
+            世界观约束与运行规则
+            <span className="text-xs text-slate-500 font-normal ml-2">（可选，定义世界法则、扮演规则等）</span>
+          </label>
+          {canGenerateRules && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleGenerateRules(false)}
+                disabled={rulesStatus === 'generating'}
+              >
+                {rulesStatus === 'generating'
+                  ? '⏳ 生成中...'
+                  : (worldRules.trim() ? '🔄 扩展规则' : '✨ AI 生成规则')
+                }
+              </Button>
+              {pendingRules && (
+                <>
+                  <Button size="sm" onClick={handleAcceptRules}>✅ 采纳</Button>
+                  <Button size="sm" variant="ghost" onClick={handleRejectRules}>丢弃</Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* AI Progress Panel for world rules generation */}
+        {rulesStatus !== 'idle' && (
+          <div className="mb-3">
+            <AIProgressPanel
+              status={rulesStatus}
+              text={rulesText}
+              error={rulesError}
+              title="AI 世界观规则生成"
+              onClear={handleClearRules}
+            />
+          </div>
+        )}
+
         <TextArea
           value={worldRules}
           onChange={(e) => onWorldRulesChange(e.target.value)}

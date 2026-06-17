@@ -129,7 +129,8 @@ function isRetryableError(err: unknown): boolean {
 }
 
 function normalizeMaxTokens(maxTokens: number | undefined): number {
-  const value = Math.floor(maxTokens ?? 2000);
+  // 默认值提高到 4000，避免输出被截断
+  const value = Math.floor(maxTokens ?? 4000);
   return Math.max(1, value);
 }
 

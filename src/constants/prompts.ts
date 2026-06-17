@@ -416,6 +416,29 @@ ${worldbookContext ? `\n\n## 已有世界书设定（必须参考，对话内容
 });
 
 /**
+ * World rules generation prompt (Step 3 - 世界观约束与运行规则).
+ * Generates worldview constraints and operation rules based on card info.
+ */
+export const WORLD_RULES_GENERATE_PROMPT = (
+  cardName: string,
+  characterSummaries: string,
+  topic?: string,
+  existingRules?: string,
+  existingWorldbookContext?: string,
+  nsfw?: boolean,
+) => {
+  const nsfwBlock = nsfw
+    ? `\n\n## NSFW 内容指令\n本角色卡允许生成成人内容（NSFW）。在世界观规则中：\n- 可以包含成人向的设定、关系或背景规则\n- 不要刻意强调或过度描写，保持自然融入`
+    : `\n\n## 内容安全指令\n本角色卡不允许生成成人内容（NSFW）。在世界观规则中：\n- 禁止包含任何成人向、性暗示或色情内容\n- 规则描述应当符合全年龄标准`;
+
+  return {
+    system: `你是一位资深的世界观设定师。请根据角色卡名称、角色概要和主题方向，生成一份完整、具体、可执行的世界观约束与运行规则。\n\n规则应覆盖（根据主题选择相关项）：\n- 世界基础设定（时代、环境、核心背景）\n- 力量/体系规则（等级、能力、限制、消耗）\n- 势力格局（主要组织、阵营、关系）\n- 运行规则（AI 扮演时必须遵守的行为、逻辑、禁忌）\n- 角色扮演约束（如何保持人设、如何回应用户、避免 OOC）\n\n写作要求：\n- 使用条目/列表格式，不要写成散文段落\n- 每条规则必须具体、可执行，避免空泛描述\n- 一句话一意，不写装饰性内容\n- 全文简体中文\n- 不要输出任何解释、总结或 markdown 代码块，只输出规则正文\n- **扩展模式**：如果提供了已有规则，必须完整保留已有规则的全部内容，只允许在其后补充新的规则条目，禁止删除、修改、重写或否定已有规则
+- **一致性**：如果提供了已生成的世界书条目，新增规则必须与之一致，不得矛盾${nsfwBlock}`,
+    user: `为以下角色卡生成世界观约束与运行规则：\n\n卡片名称：${cardName}\n角色概要：${characterSummaries || '(暂无角色概要，请根据卡片名称和主题自由发挥)'}\n${topic ? `主题/方向：${topic}\n` : ''}${existingRules ? `\n已有规则（必须完整保留，仅在此基础上补充缺失的规则条目）：\n${existingRules}\n` : ''}\n${existingWorldbookContext ? `\n\n## 已生成的世界书条目（生成规则时必须与以下设定保持一致，不得冲突）\n${existingWorldbookContext}\n` : ''}请直接输出完整的世界观约束与运行规则正文（包含已有规则 + 新增补充）。`,
+  };
+};
+
+/**
  * AI Smart Organize prompt.
  * Analyzes all world book entries and suggests optimized parameters.
  * Reference: st-card-builder AI 智能整理 feature.

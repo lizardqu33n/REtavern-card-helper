@@ -16,6 +16,23 @@
  */
 import type { MvuVariable, MvuConfig } from '../constants/defaults';
 
+// ── Helper: Escape JS string literals ─────────────────────────────────────
+
+/**
+ * Escape special characters for safe embedding in JS string literals.
+ * Prevents syntax errors and potential XSS when variable values contain quotes/backslashes.
+ */
+function escapeJsString(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/</g, '\\x3c')
+    .replace(/>/g, '\\x3e');
+}
+
 // ── Schema.js builder ─────────────────────────────────────────────────────
 
 /**
@@ -271,7 +288,7 @@ function buildDynamicStatusBarHtml(variables: MvuVariable[]): string {
   ).join('\n');
 
   const updates = ids.map(item =>
-    `      $('#${item.id}').text(_.get(statData, '${item.jsPath}', '${item.defaultVal}'));`
+    `      $('#${item.id}').text(_.get(statData, '${escapeJsString(item.jsPath)}', '${escapeJsString(String(item.defaultVal))}'));`
   ).join('\n');
 
   return `<!doctype html>

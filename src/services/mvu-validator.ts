@@ -226,9 +226,11 @@ export function validateMvuConfig(config: MvuConfig): MvuIssue[] {
     });
   }
 
-  // 5. Hidden/readonly prefix consistency
+  // 5. Hidden/readonly prefix consistency (bidirectional check)
   for (const v of config.variables) {
     const lastSeg = v.path.at(-1) ?? '';
+
+    // Forward: prefix implies attribute
     if (lastSeg.startsWith('$') && !v.hidden) {
       issues.push({
         id: generateId(),
@@ -248,6 +250,30 @@ export function validateMvuConfig(config: MvuConfig): MvuIssue[] {
         variableId: v.id,
         message: `"${lastSeg}" 以 _ 开头但未标记为只读`,
         fixLabel: '标记为只读',
+        autoFixable: true,
+      });
+    }
+
+    // Reverse: attribute implies prefix
+    if (v.hidden && !lastSeg.startsWith('$')) {
+      issues.push({
+        id: generateId(),
+        severity: 'warning',
+        category: '前缀不一致',
+        variableId: v.id,
+        message: `"${lastSeg}" 已标记为隐藏但路径不以 $ 开头`,
+        fixLabel: '添加 $ 前缀',
+        autoFixable: true,
+      });
+    }
+    if (v.readonly && !lastSeg.startsWith('_')) {
+      issues.push({
+        id: generateId(),
+        severity: 'warning',
+        category: '前缀不一致',
+        variableId: v.id,
+        message: `"${lastSeg}" 已标记为只读但路径不以 _ 开头`,
+        fixLabel: '添加 _ 前缀',
         autoFixable: true,
       });
     }

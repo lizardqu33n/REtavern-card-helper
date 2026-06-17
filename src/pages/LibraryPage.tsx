@@ -33,13 +33,15 @@ export function LibraryPage() {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter((c) => (c.name as string).toLowerCase().includes(q));
+      result = result.filter((c) => ((c.name as string) || '').toLowerCase().includes(q));
     }
 
     result.sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'name') {
-        cmp = ((a.name as string) || '').localeCompare((b.name as string) || '');
+        const aName = (a.name as string) || '';
+        const bName = (b.name as string) || '';
+        cmp = aName.localeCompare(bName);
       } else {
         cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
       }

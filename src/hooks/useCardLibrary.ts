@@ -50,7 +50,12 @@ export function useCardLibrary() {
   const saveCard = useCallback(async (draft: Parameters<typeof assembleCard>[0], existingId?: number) => {
     const card = assembleCard(draft, existingId);
     if (existingId) {
-      card.createdAt = ((await db.cards.get(existingId)) as CardRecord)?.createdAt || new Date();
+      const existing = (await db.cards.get(existingId)) as CardRecord;
+      if (existing) {
+        // Preserve original timestamps and soft-delete status
+        card.createdAt = existing.createdAt || new Date();
+        card.deletedAt = existing.deletedAt ?? null;
+      }
     }
     const id = await db.cards.put(card);
     await loadCards();

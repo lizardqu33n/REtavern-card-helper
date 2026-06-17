@@ -17,6 +17,7 @@ import {
   CUSTOM_STATUS_BAR_PROMPT,
   FIRST_MESSAGE_PROMPT,
   EXAMPLE_DIALOGUES_PROMPT,
+  WORLD_RULES_GENERATE_PROMPT,
   ORGANIZE_ENTRIES_PROMPT,
   GENERATE_KEYS_PROMPT,
   MVU_VARIABLES_PROMPT,
@@ -260,9 +261,13 @@ export function useAIGenerate() {
     sceneHint: string,
     targetWordCount?: number,
     worldbookContext?: string,
+    writingRequirements?: string,
   ): Promise<string> => {
-    const prompts = FIRST_MESSAGE_PROMPT(cardName, characterDescriptions, sceneHint, targetWordCount, worldbookContext);
-    const maxTokens = targetWordCount ? Math.max(4000, targetWordCount * 3) : 4000;
+    const prompts = FIRST_MESSAGE_PROMPT(cardName, characterDescriptions, sceneHint, targetWordCount, worldbookContext, writingRequirements);
+    // 动态计算 max_tokens，但设置上限避免超出模型限制
+    const maxTokens = targetWordCount
+      ? Math.min(Math.max(4000, targetWordCount * 3), 16000)
+      : 4000;
     return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.9, max_tokens: maxTokens, presetMode: 'force' });
   }, []);
 
@@ -277,7 +282,10 @@ export function useAIGenerate() {
     writingRequirements?: string,
   ): Promise<string> => {
     const prompts = FIRST_MESSAGE_PROMPT(cardName, characterDescriptions, sceneHint, targetWordCount, worldbookContext, writingRequirements);
-    const maxTokens = targetWordCount ? Math.max(4000, targetWordCount * 3) : 4000;
+    // 动态计算 max_tokens，但设置上限避免超出模型限制
+    const maxTokens = targetWordCount
+      ? Math.min(Math.max(4000, targetWordCount * 3), 16000)
+      : 4000;
     return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.9, max_tokens: maxTokens, presetMode: 'force' });
   }, []);
 
@@ -296,6 +304,33 @@ export function useAIGenerate() {
   ): Promise<string> => {
     const prompts = EXAMPLE_DIALOGUES_PROMPT(cardName, characterDescriptions, worldbookContext);
     return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, max_tokens: 6000, presetMode: 'force' });
+  }, []);
+
+  /** Generate worldview constraints / operation rules */
+  const generateWorldRules = useCallback(async (
+    cardName: string,
+    characterSummaries: string,
+    topic?: string,
+    existingRules?: string,
+    existingWorldbookContext?: string,
+    nsfw?: boolean,
+  ): Promise<string> => {
+    const prompts = WORLD_RULES_GENERATE_PROMPT(cardName, characterSummaries, topic, existingRules, existingWorldbookContext, nsfw);
+    return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.7, max_tokens: 4000, presetMode: 'force' });
+  }, []);
+
+  /** Generate worldview constraints / operation rules with streaming */
+  const generateWorldRulesStreaming = useCallback(async (
+    cardName: string,
+    characterSummaries: string,
+    onChunk: StreamCallback,
+    topic?: string,
+    existingRules?: string,
+    existingWorldbookContext?: string,
+    nsfw?: boolean,
+  ): Promise<string> => {
+    const prompts = WORLD_RULES_GENERATE_PROMPT(cardName, characterSummaries, topic, existingRules, existingWorldbookContext, nsfw);
+    return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.7, max_tokens: 4000, presetMode: 'force' });
   }, []);
 
   /**
@@ -553,6 +588,8 @@ export function useAIGenerate() {
     generateFirstMessageStreaming,
     generateExampleDialogues,
     generateExampleDialoguesStreaming,
+    generateWorldRules,
+    generateWorldRulesStreaming,
     organizeEntries,
     generateEntryKeys,
     generateMvuVariables,

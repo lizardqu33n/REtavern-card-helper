@@ -305,6 +305,7 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
     name: draft.cardName,
     createdAt: now,
     updatedAt: now,
+    deletedAt: null as Date | null,
   };
 }
 

@@ -219,7 +219,11 @@ export function useWizardState(editId?: number) {
 
       if (editId) {
         const existing = await db.cards.get(editId);
-        if (existing) card.createdAt = (existing as Record<string, Date>).createdAt;
+        if (existing) {
+          // Preserve original timestamps and soft-delete status
+          card.createdAt = (existing as Record<string, Date>).createdAt;
+          card.deletedAt = (existing as Record<string, Date | null | undefined>).deletedAt ?? null;
+        }
       }
 
       await db.cards.put(card);
