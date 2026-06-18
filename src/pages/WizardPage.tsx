@@ -292,8 +292,9 @@ ${e.content || ''}`)
         if (newDesc && newDesc.length > 20) {
           // Update character description (fills the text field; pre-generation content already saved to history above)
           updateCharacter(index, { description: newDesc });
-          // Sync linked world book entries immediately so the preview stays current
-          injectCharacterEntries();
+          // Defer world book sync so React re-renders first and draft has the new description;
+          // calling synchronously would overwrite the new description with stale draft data
+          setTimeout(() => injectCharacterEntries(), 0);
           addToast('success', `${char.name} 生成完成`);
         } else {
           console.warn(`[生成] ${char.name} AI 返回内容为空或过短:`, parsed.description);
