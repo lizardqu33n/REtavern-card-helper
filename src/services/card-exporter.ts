@@ -285,7 +285,7 @@ function buildCardExtensions(draft: WizardDraft, zodScript?: string): Record<str
     mvu_has_status_bar: Boolean(draft.mvu.statusBarHtml),
     mvu_has_ejs_preprocess: Boolean(draft.mvu.ejsPreprocessContent),
     // 酒馆助手脚本注册
-    tavern_helper: Object.keys(tavernHelperScripts).length > 0 ? { scripts: tavernHelperScripts } : undefined,
+    tavern_helper: Object.keys(tavernHelperScripts).length > 0 ? { scripts: tavernHelperScripts, variables: {} } : undefined,
     // 正则脚本
     regex_scripts: Object.keys(regexScripts).length > 0 ? regexScripts : undefined,
   };

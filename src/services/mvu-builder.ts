@@ -111,103 +111,144 @@ function buildSchemaTree(sections: MvuSchemaSection[]): SchemaNode {
   return root;
 }
 
-function serializeSchemaNode(node: SchemaNode, indent: number): string {
+/**
+ * Serialize a SchemaNode and return both the Zod expression and its default value literal.
+ */
+function serializeSchemaNode(node: SchemaNode, indent: number): { expr: string; defaults: string } {
   const pad = ' '.repeat(indent);
+  const innerPad = ' '.repeat(indent + 2);
   const lines: string[] = [];
+  const defaultsEntries: string[] = [];
+
   lines.push(`${pad}z.object({`);
   for (const [key, child] of node.children) {
     if (child.children.size === 0 && child.variable) {
       const leafVar = { ...child.variable, path: key };
-      lines.push(`${pad}  ${key}: ${buildZodExpression(leafVar)},`);
+      const { expr, defLit } = buildLeafZod(leafVar);
+      lines.push(`${innerPad}${key}: ${expr},`);
+      defaultsEntries.push(`${innerPad}${key}: ${defLit}`);
     } else {
-      const childExpr = serializeSchemaNode(child, indent + 2);
-      lines.push(`${pad}  ${key}: ${childExpr.trimStart()},`);
+      const childResult = serializeSchemaNode(child, indent + 2);
+      lines.push(`${innerPad}${key}: ${childResult.expr},`);
+      defaultsEntries.push(`${innerPad}${key}: ${childResult.defaults}`);
     }
   }
   lines.push(`${pad}})`);
-  return lines.join('\n');
+
+  const objExpr = lines.join('\n');
+  const defaults = `{\n${defaultsEntries.join(',\n')}\n${pad}}`;
+  return { expr: objExpr, defaults };
+}
+
+/**
+ * Build a leaf-level Zod expression with .prefault() and return the default value literal.
+ */
+function buildLeafZod(v: MvuVariable): { expr: string; defLit: string } {
+  const type = v.zodType;
+  const initialValue = v.initialValue;
+
+  // z.coerce.number() with optional transform clamp
+  if (type === 'z.coerce.number()') {
+    let base = 'z.coerce.number()';
+    if (v.range) {
+      base = `z.coerce.number().transform(v => _.clamp(Math.round(v), ${v.range.min}, ${v.range.max}))`;
+    }
+    const defVal = typeof initialValue === 'number' ? initialValue : 0;
+    return { expr: `${base}.prefault(${defVal})`, defLit: String(defVal) };
+  }
+
+  // z.boolean()
+  if (type === 'z.boolean()' || type === 'z.boolean') {
+    const defVal = initialValue === true;
+    return { expr: `z.boolean().prefault(${defVal})`, defLit: String(defVal) };
+  }
+
+  // z.enum([...])
+  if (type.startsWith('z.enum(')) {
+    const enumMatch = type.match(/z\.enum\(\[([^\]]+)\]\)/);
+    let enumExpr = type;
+    let defVal: string;
+    if (enumMatch) {
+      const values = enumMatch[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, ''));
+      defVal = typeof initialValue === 'string' && values.includes(initialValue)
+        ? `'${initialValue}'`
+        : (values.length > 0 ? `'${values[0]}'` : "''");
+      enumExpr = `z.enum([${values.map(vv => `'${vv}'`).join(', ')}])`;
+    } else {
+      defVal = typeof initialValue === 'string' ? `'${initialValue}'` : "''";
+    }
+    return { expr: `${enumExpr}.prefault(${defVal})`, defLit: defVal };
+  }
+
+  // z.object({...}) — complex object type (gets .or(z.literal('待初始化')) fallback)
+  if (type.startsWith('z.object(')) {
+    const defVal = initialValue !== null && initialValue !== undefined ? String(initialValue) : "'待初始化'";
+    return { expr: `${type}.or(z.literal('待初始化')).prefault('待初始化')`, defLit: "'待初始化'" };
+  }
+
+  // z.record(...) — record/map type
+  if (type.startsWith('z.record(')) {
+    // Build default record object from initialValue if it's an object
+    let defLit = '{}';
+    if (initialValue !== null && typeof initialValue === 'object' && !Array.isArray(initialValue)) {
+      const entries = Object.entries(initialValue as Record<string, unknown>);
+      if (entries.length > 0) {
+        defLit = `{ ${entries.map(([k, val]) => {
+          if (val !== null && typeof val === 'object') {
+            const subEntries = Object.entries(val as Record<string, unknown>);
+            return `'${k}': { ${subEntries.map(([sk, sv]) => {
+              if (typeof sv === 'string') return `${sk}: '${sv}'`;
+              if (typeof sv === 'boolean') return `${sk}: ${sv}`;
+              return `${sk}: ${sv}`;
+            }).join(', ')} }`;
+          }
+          if (typeof val === 'string') return `'${k}': '${val}'`;
+          return `'${k}': ${val}`;
+        }).join(', ')} }`;
+      }
+    }
+    return { expr: `${type}.prefault(${defLit})`, defLit };
+  }
+
+  // Default: z.string()
+  const strDef = typeof initialValue === 'string' ? `'${initialValue.replace(/'/g, "\\'")}'` : "''";
+  return { expr: `z.string().prefault(${strDef})`, defLit: strDef };
 }
 
 /**
  * Build the schema.ts content from structured MVU sections.
+ * Every field gets .prefault(defaultValue), and every nested z.object
+ * gets .prefault({...}) with the full default structure.
  */
 export function buildSchemaTs(sections: MvuSchemaSection[]): string {
   const lines: string[] = [ZOD_RULES_HEADER];
   lines.push('export const Schema = z.object({');
 
   const tree = buildSchemaTree(sections);
+  const rootDefaults: string[] = [];
+
   for (const [rootKey, child] of tree.children) {
     lines.push(`  // ── ${rootKey} ──`);
     if (child.children.size === 0 && child.variable) {
-      lines.push(`  ${rootKey}: ${buildZodExpression(child.variable)},`);
+      const leafVar = { ...child.variable, path: rootKey };
+      const { expr, defLit } = buildLeafZod(leafVar);
+      lines.push(`  ${rootKey}: ${expr},`);
+      rootDefaults.push(`  ${rootKey}: ${defLit}`);
     } else {
-      const childExpr = serializeSchemaNode(child, 2);
-      lines.push(`  ${rootKey}: ${childExpr.trimStart()},`);
+      const result = serializeSchemaNode(child, 2);
+      lines.push(`  ${rootKey}: ${result.expr}.prefault(${result.defaults}),`);
+      rootDefaults.push(`  ${rootKey}: ${result.defaults}`);
     }
     lines.push('');
   }
 
+  lines.push('}).prefault({');
+  lines.push(rootDefaults.join(',\n'));
   lines.push('});');
   lines.push('');
   lines.push('export type Schema = z.output<typeof Schema>;');
 
   return lines.join('\n');
-}
-
-/**
- * Build a Zod expression for a single variable.
- */
-function buildZodExpression(v: MvuVariable): string {
-  // Handle nested paths (e.g. "角色.好感度" → nested object)
-  if (v.path.includes('.')) {
-    return buildNestedZod(v);
-  }
-
-  const type = v.zodType;
-
-  // z.coerce.number()
-  if (type === 'z.coerce.number()') {
-    let expr = 'z.coerce.number()';
-    if (v.range) {
-      expr = `z.coerce.number().transform(v => _.clamp(v, ${v.range.min}, ${v.range.max}))`;
-    }
-    return expr;
-  }
-
-  // z.enum([...])
-  if (type.startsWith('z.enum(')) {
-    return type;
-  }
-
-  // z.object({...})
-  if (type.startsWith('z.object(')) {
-    // Add .or(z.literal('待初始化')).prefault('待初始化') for complex objects
-    if (type.includes('{') && type.includes('}')) {
-      return `${type}.or(z.literal('待初始化')).prefault('待初始化')`;
-    }
-    return type;
-  }
-
-  // z.record(...)
-  if (type.startsWith('z.record(')) {
-    return type;
-  }
-
-  // Default: z.string()
-  return 'z.string()';
-}
-
-/**
- * Build nested Zod expression for dotted paths.
- */
-function buildNestedZod(v: MvuVariable): string {
-  const parts = v.path.split('.');
-  // Build from inside out
-  let inner = buildZodExpression({ ...v, path: parts[parts.length - 1] });
-  for (let i = parts.length - 2; i >= 0; i--) {
-    inner = `z.object({ ${parts[i + 1]}: ${inner} })`;
-  }
-  return inner;
 }
 
 /**
