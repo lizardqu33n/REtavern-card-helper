@@ -436,6 +436,62 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
     const bundle = buildMvuScriptBundle(draft.mvu);
     mvuBundle = bundle;
 
+    // EJS预处理 — EJS preprocess entry (only when there are EJS configs using variables)
+    if (bundle.ejsPreprocess) {
+      mvuEntryOffset++;
+      entries.push({
+        id: mvuEntryOffset,
+        keys: [],
+        secondary_keys: [],
+        content: bundle.ejsPreprocess,
+        name: 'EJS预处理',
+        enabled: true,
+        insertion_order: 180,
+        case_sensitive: false,
+        selective: false,
+        constant: true,
+        position: 'after_char',
+        priority: 100,
+        comment: 'EJS 变量预处理',
+        use_regex: true,
+        extensions: buildSTExtensions({
+          position: 'at_depth',
+          displayIndex: mvuEntryOffset,
+          depth: 0,
+          preventRecursion: true,
+          excludeRecursion: true,
+        }),
+      });
+    }
+
+    // [mvu_update]变量更新规则 — AI update rules (bare YAML, at_depth/0 for MVU parser)
+    if (bundle.updateRulesYaml) {
+      mvuEntryOffset++;
+      entries.push({
+        id: mvuEntryOffset,
+        keys: [],
+        secondary_keys: [],
+        content: bundle.updateRulesYaml,
+        name: '[mvu_update]变量更新规则',
+        enabled: true,
+        insertion_order: 190,
+        case_sensitive: false,
+        selective: false,
+        constant: true,
+        position: 'after_char',
+        priority: 100,
+        comment: '[mvu_update]变量更新规则',
+        use_regex: true,
+        extensions: buildSTExtensions({
+          position: 'at_depth',
+          displayIndex: mvuEntryOffset,
+          depth: 0,
+          preventRecursion: true,
+          excludeRecursion: true,
+        }),
+      });
+    }
+
     // [InitVar]请勿打开 — initial variable values (disabled by default, like reference card)
     // 初始值通过 first_mes 中的 EJS setvar 设置，InitVar 仅作为禁用回退
     if (bundle.initvarYaml) {
@@ -465,65 +521,11 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
       });
     }
 
-    // [mvu_update]变量更新规则 — AI update rules
-    if (bundle.updateRulesYaml) {
-      mvuEntryOffset++;
-      entries.push({
-        id: mvuEntryOffset,
-        keys: [],
-        secondary_keys: [],
-        content: bundle.updateRulesYaml,
-        name: '[mvu_update]变量更新规则',
-        enabled: true,
-        insertion_order: 190,
-        case_sensitive: false,
-        selective: false,
-        constant: true,
-        position: 'after_char',
-        priority: 100,
-        comment: '[mvu_update]变量更新规则',
-        use_regex: true,
-        extensions: buildSTExtensions({
-          position: 'at_depth',
-          displayIndex: mvuEntryOffset,
-          depth: 0,
-          preventRecursion: true,
-          excludeRecursion: true,
-        }),
-      });
-    }
-
-    // EJS预处理 — EJS preprocess entry
-    if (bundle.ejsPreprocess) {
-      mvuEntryOffset++;
-      entries.push({
-        id: mvuEntryOffset,
-        keys: [],
-        secondary_keys: [],
-        content: bundle.ejsPreprocess,
-        name: 'EJS预处理',
-        enabled: true,
-        insertion_order: 1001,
-        case_sensitive: false,
-        selective: false,
-        constant: true,
-        position: 'after_char',
-        priority: 100,
-        comment: 'EJS 变量预处理',
-        use_regex: false,
-        extensions: buildSTExtensions({
-          position: 'after_char',
-          displayIndex: mvuEntryOffset,
-          preventRecursion: true,
-        }),
-      });
-    }
-
     // 脚本/MVU.txt 和 脚本/Zod.txt 不作为世界书条目
     // 它们的内容直接内联在 extensions.tavern_helper.scripts 里（酒馆助手脚本区）
     // 状态栏 HTML 通过 regex_scripts 替换 <StatusPlaceHolderImpl/> 占位符，见 buildCardExtensions
 
-    // 变量列表 — Variable list
+    // MVU 变量列表 — Variable list (after_char/4 for AI visibility, not for MVU parser)
     if (bundle.variableList) {
       mvuEntryOffset++;
       entries.push({
@@ -531,7 +533,7 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         keys: [],
         secondary_keys: [],
         content: bundle.variableList,
-        name: '变量列表',
+        name: 'MVU 变量列表',
         enabled: true,
         insertion_order: 2001,
         case_sensitive: false,
@@ -544,12 +546,15 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         extensions: buildSTExtensions({
           position: 'after_char',
           displayIndex: mvuEntryOffset,
+          depth: 4,
           preventRecursion: true,
+          excludeRecursion: false,
         }),
       });
     }
 
-    // [mvu_update]变量输出格式 — Variable output format
+    // MVU 变量输出格式 — Full output format with XML tags (after_char/4 for AI visibility)
+    // Contains <update_variable_rules>, <status_bar_rule>, <status_current_variable>
     if (bundle.variableOutputFormat) {
       mvuEntryOffset++;
       entries.push({
@@ -557,7 +562,7 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         keys: [],
         secondary_keys: [],
         content: bundle.variableOutputFormat,
-        name: '[mvu_update]变量输出格式',
+        name: 'MVU 变量输出格式',
         enabled: true,
         insertion_order: 2002,
         case_sensitive: false,
@@ -570,7 +575,9 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         extensions: buildSTExtensions({
           position: 'after_char',
           displayIndex: mvuEntryOffset,
+          depth: 4,
           preventRecursion: true,
+          excludeRecursion: false,
         }),
       });
     }
@@ -714,8 +721,8 @@ function reconstructMvuConfig(
   if (!ext.mvu_enabled) return undefined;
 
   // Extract MVU content from lorebook entries by name
-  const mvuEntryNames = ['[InitVar]请勿打开', '[mvu_update]变量更新规则', 'EJS预处理', '变量列表', '变量列表.txt', '[mvu_update]变量输出格式', '变量输出格式.txt'];
-  const mvuEntries = rawEntries.filter(e => mvuEntryNames.includes((e.name as string) || ''));
+  const mvuEntryNames = ['[InitVar]请勿打开', '[mvu_update]变量更新规则', 'EJS预处理', '变量列表', '变量列表.txt', 'MVU 变量列表', 'MVU 变量输出格式', '[mvu_update]变量输出格式', '变量输出格式.txt'];
+  const mvuEntries = rawEntries.filter(e => mvuEntryNames.includes((e.name as string) || '') || mvuEntryNames.includes((e.comment as string) || ''));
 
   let schemaTsContent = '';
   let initvarYamlContent = '';
