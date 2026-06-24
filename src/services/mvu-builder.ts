@@ -672,19 +672,25 @@ export function buildMvuScriptBundle(mvu: MvuConfig): {
   initvarYaml: string;
   updateRulesYaml: string;
 } {
-  // 兜底生成：旧项目或小白模式 AI 生成后未手动 regenerate 的情况
-  const schemaTsContent = mvu.schemaTsContent ||
-    (mvu.schemaSections.length > 0 ? buildSchemaTs(mvu.schemaSections) : '');
-  const initvarYaml = mvu.initvarYamlContent ||
-    (mvu.schemaSections.length > 0 ? buildInitvarYaml(mvu.schemaSections) : '');
-  const updateRulesYaml = mvu.updateRulesYamlContent ||
-    (mvu.updateRules.length > 0 ? buildUpdateRulesYaml(mvu.updateRules) : '');
+  // 始终从结构化数据(schemaSections/updateRules)重新生成，确保 .prefault() 等修复生效
+  // 仅当结构化数据为空时才回退到缓存的文本内容（兼容极端情况）
+  const schemaTsContent = mvu.schemaSections.length > 0
+    ? buildSchemaTs(mvu.schemaSections)
+    : (mvu.schemaTsContent || '');
+  const initvarYaml = mvu.schemaSections.length > 0
+    ? buildInitvarYaml(mvu.schemaSections)
+    : (mvu.initvarYamlContent || '');
+  const updateRulesYaml = mvu.updateRules.length > 0
+    ? buildUpdateRulesYaml(mvu.updateRules)
+    : (mvu.updateRulesYamlContent || '');
 
   return {
     zodTxt: buildZodTxt(schemaTsContent),
     variableList: buildVariableList(mvu.schemaSections),
     variableOutputFormat: buildVariableOutputFormat(mvu.schemaSections, mvu.updateRules),
-    ejsPreprocess: mvu.ejsPreprocessContent || buildEjsPreprocess([], mvu.schemaSections),
+    ejsPreprocess: mvu.ejsConfigs.length > 0
+      ? buildEjsPreprocess(mvu.ejsConfigs, mvu.schemaSections)
+      : (mvu.ejsPreprocessContent || buildEjsPreprocess([], mvu.schemaSections)),
     statusBarHtml: mvu.statusBarHtml,
     initvarYaml,
     updateRulesYaml,
