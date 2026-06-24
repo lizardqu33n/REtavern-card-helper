@@ -113,14 +113,17 @@ function buildSchemaTree(sections: MvuSchemaSection[]): SchemaNode {
 
 /**
  * Serialize a SchemaNode and return both the Zod expression and its default value literal.
+ * @param node - The schema node to serialize
+ * @param keyIndent - Indentation level (spaces) where the field key starts;
+ *                    the closing `})` aligns at this level, inner fields at keyIndent+2.
  */
-function serializeSchemaNode(node: SchemaNode, indent: number): { expr: string; defaults: string } {
-  const pad = ' '.repeat(indent);
-  const innerPad = ' '.repeat(indent + 2);
+function serializeSchemaNode(node: SchemaNode, keyIndent: number): { expr: string; defaults: string } {
+  const innerPad = ' '.repeat(keyIndent + 2);
+  const keyPad = ' '.repeat(keyIndent);
   const lines: string[] = [];
   const defaultsEntries: string[] = [];
 
-  lines.push(`${pad}z.object({`);
+  lines.push(`z.object({`);
   for (const [key, child] of node.children) {
     if (child.children.size === 0 && child.variable) {
       const leafVar = { ...child.variable, path: key };
@@ -128,15 +131,15 @@ function serializeSchemaNode(node: SchemaNode, indent: number): { expr: string; 
       lines.push(`${innerPad}${key}: ${expr},`);
       defaultsEntries.push(`${innerPad}${key}: ${defLit}`);
     } else {
-      const childResult = serializeSchemaNode(child, indent + 2);
+      const childResult = serializeSchemaNode(child, keyIndent + 2);
       lines.push(`${innerPad}${key}: ${childResult.expr},`);
       defaultsEntries.push(`${innerPad}${key}: ${childResult.defaults}`);
     }
   }
-  lines.push(`${pad}})`);
+  lines.push(`${keyPad}})`);
 
   const objExpr = lines.join('\n');
-  const defaults = `{\n${defaultsEntries.join(',\n')}\n${pad}}`;
+  const defaults = `{\n${defaultsEntries.join(',\n')}\n${keyPad}}`;
   return { expr: objExpr, defaults };
 }
 
@@ -221,29 +224,22 @@ function buildLeafZod(v: MvuVariable): { expr: string; defLit: string } {
  * gets .prefault({...}) with the full default structure.
  */
 export function buildSchemaTs(sections: MvuSchemaSection[]): string {
-  const lines: string[] = [ZOD_RULES_HEADER];
+  const lines: string[] = [];
   lines.push('export const Schema = z.object({');
 
   const tree = buildSchemaTree(sections);
-  const rootDefaults: string[] = [];
 
   for (const [rootKey, child] of tree.children) {
-    lines.push(`  // ── ${rootKey} ──`);
     if (child.children.size === 0 && child.variable) {
       const leafVar = { ...child.variable, path: rootKey };
-      const { expr, defLit } = buildLeafZod(leafVar);
+      const { expr } = buildLeafZod(leafVar);
       lines.push(`  ${rootKey}: ${expr},`);
-      rootDefaults.push(`  ${rootKey}: ${defLit}`);
     } else {
       const result = serializeSchemaNode(child, 2);
       lines.push(`  ${rootKey}: ${result.expr}.prefault(${result.defaults}),`);
-      rootDefaults.push(`  ${rootKey}: ${result.defaults}`);
     }
-    lines.push('');
   }
 
-  lines.push('}).prefault({');
-  lines.push(rootDefaults.join(',\n'));
   lines.push('});');
   lines.push('');
   lines.push('export type Schema = z.output<typeof Schema>;');
@@ -682,7 +678,7 @@ export function buildMvuScriptBundle(mvu: MvuConfig): {
     : (mvu.initvarYamlContent || '');
   const updateRulesYaml = mvu.updateRules.length > 0
     ? buildUpdateRulesYaml(mvu.updateRules)
-    : (mvu.updateRulesYamlContent || '');
+    : (mvu.updateRulesYamlContent || '变量更新规则: {}');
 
   return {
     zodTxt: buildZodTxt(schemaTsContent),

@@ -97,9 +97,11 @@ function buildFirstMessage(draft: WizardDraft): string {
     }
   }
 
-  // 追加状态栏占位符
+  // 追加状态栏占位符（如果尚未存在）
   if (draft.mvu?.enabled && draft.mvu.statusBarHtml?.trim()) {
-    result = result ? `${result}\n${STATUS_BAR_PLACEHOLDER}` : STATUS_BAR_PLACEHOLDER;
+    if (!result.includes(STATUS_BAR_PLACEHOLDER)) {
+      result = result ? `${result}\n${STATUS_BAR_PLACEHOLDER}` : STATUS_BAR_PLACEHOLDER;
+    }
   }
 
   return result;
@@ -319,7 +321,7 @@ function buildSTExtensions(overrides: {
   return {
     position: POSITION_INDEX[overrides.position] ?? 1,
     probability: overrides.probability ?? 100,
-    useProbability: (overrides.probability ?? 100) < 100,
+    useProbability: true,
     group: overrides.group ?? '',
     group_override: false,
     group_weight: overrides.groupWeight ?? 100,
@@ -334,9 +336,9 @@ function buildSTExtensions(overrides: {
     use_group_scoring: false,
     case_sensitive: overrides.caseSensitive ?? null,
     automation_id: '',
-    sticky: overrides.sticky != null ? overrides.sticky : null,
-    cooldown: overrides.cooldown != null ? overrides.cooldown : null,
-    delay: overrides.delay != null ? overrides.delay : null,
+    sticky: overrides.sticky ?? 0,
+    cooldown: overrides.cooldown ?? 0,
+    delay: overrides.delay ?? 0,
     match_persona_description: false,
     match_character_description: false,
     match_character_personality: false,
@@ -346,6 +348,7 @@ function buildSTExtensions(overrides: {
     triggers: [],
     ignore_budget: overrides.ignoreBudget ?? false,
     vectorized: false,
+    outlet_name: '',
     display_index: overrides.displayIndex,
   };
 }
@@ -448,12 +451,12 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         case_sensitive: false,
         selective: false,
         constant: true,
-        position: 'after_char', // top-level V2 field matches reference card
+        position: 'after_char',
         priority: 100,
         comment: '[InitVar]请勿打开',
         use_regex: true,
         extensions: buildSTExtensions({
-          position: 'at_depth', // runtime position: at_depth with depth 0
+          position: 'at_depth',
           displayIndex: mvuEntryOffset,
           depth: 0,
           preventRecursion: true,
@@ -472,18 +475,20 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
         content: bundle.updateRulesYaml,
         name: '[mvu_update]变量更新规则',
         enabled: true,
-        insertion_order: 1000,
+        insertion_order: 190,
         case_sensitive: false,
         selective: false,
         constant: true,
         position: 'after_char',
         priority: 100,
-        comment: 'MVU 变量更新规则',
-        use_regex: false,
+        comment: '[mvu_update]变量更新规则',
+        use_regex: true,
         extensions: buildSTExtensions({
-          position: 'after_char',
+          position: 'at_depth',
           displayIndex: mvuEntryOffset,
+          depth: 0,
           preventRecursion: true,
+          excludeRecursion: true,
         }),
       });
     }

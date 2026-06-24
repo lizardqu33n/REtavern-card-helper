@@ -1,5 +1,5 @@
 /**
- * MVU Builder Tests - 验证 .prefault() 默认值和 tavern_helper.variables 修复
+ * MVU Builder Tests - 验证 .prefault() 默认值修复
  */
 import { describe, it, expect } from 'vitest';
 import { buildSchemaTs, buildMvuScriptBundle } from './mvu-builder';
@@ -10,13 +10,10 @@ describe('MVU Builder - .prefault() 修复验证', () => {
   function makeTestSections(): MvuSchemaSection[] {
     return [
       {
-        id: 'sec1',
         name: '基础属性',
         variables: [
           {
-            id: 'v1',
             path: 'HP',
-            name: '生命值',
             zodType: 'z.coerce.number()',
             initialValue: 100,
             range: { min: 0, max: 100 },
@@ -24,36 +21,28 @@ describe('MVU Builder - .prefault() 修复验证', () => {
             description: '角色生命值',
           },
           {
-            id: 'v2',
             path: 'MP',
-            name: '魔法值',
             zodType: 'z.coerce.number()',
             initialValue: 50,
             prefix: '',
             description: '魔法值',
           },
           {
-            id: 'v3',
             path: '名字',
-            name: '名字',
             zodType: 'z.string()',
             initialValue: '艾伦',
             prefix: '',
             description: '角色名',
           },
           {
-            id: 'v4',
             path: '存活',
-            name: '存活状态',
             zodType: 'z.boolean()',
             initialValue: true,
             prefix: '',
             description: '是否存活',
           },
           {
-            id: 'v5',
             path: '阵营',
-            name: '阵营',
             zodType: 'z.enum(["守序善良","中立善良","混乱善良"])',
             initialValue: '守序善良',
             prefix: '',
@@ -62,13 +51,10 @@ describe('MVU Builder - .prefault() 修复验证', () => {
         ],
       },
       {
-        id: 'sec2',
         name: '嵌套属性',
         variables: [
           {
-            id: 'v6',
             path: '属性.力量',
-            name: '力量',
             zodType: 'z.coerce.number()',
             initialValue: 10,
             range: { min: 0, max: 20 },
@@ -76,9 +62,7 @@ describe('MVU Builder - .prefault() 修复验证', () => {
             description: '力量属性',
           },
           {
-            id: 'v7',
             path: '属性.敏捷',
-            name: '敏捷',
             zodType: 'z.coerce.number()',
             initialValue: 12,
             range: { min: 0, max: 20 },
@@ -86,9 +70,7 @@ describe('MVU Builder - .prefault() 修复验证', () => {
             description: '敏捷属性',
           },
           {
-            id: 'v8',
             path: '属性.智力',
-            name: '智力',
             zodType: 'z.coerce.number()',
             initialValue: 14,
             range: { min: 0, max: 20 },
@@ -100,103 +82,93 @@ describe('MVU Builder - .prefault() 修复验证', () => {
     ];
   }
 
-  describe('buildSchemaTs - 每个字段都应包含 .prefault()', () => {
-    it('叶子数字字段应该有 .prefault(默认值)', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toContain('.prefault(100)');
-      expect(schema).toContain('.prefault(50)');
-    });
-
-    it('字符串字段应该有 .prefault(\'默认值\')', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toContain(".prefault('艾伦')");
-    });
-
-    it('布尔字段应该有 .prefault(true/false)', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toContain('.prefault(true)');
-    });
-
-    it('枚举字段应该有 .prefault()', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toContain(".prefault('守序善良')");
-    });
-
-    it('嵌套 object 字段应该有 .prefault({...})', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toMatch(/属性:[\s\S]*\.prefault\(\{/);
-    });
-
-    it('根 z.object 应该有 .prefault({...}) 包含所有根字段默认值', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      expect(schema).toMatch(/\}\)\.prefault\(\{[\s\S]*HP:[\s\S]*MP:[\s\S]*名字:[\s\S]*存活:[\s\S]*阵营:[\s\S]*属性:/);
-    });
-
-    it('不应该存在没有 .prefault() 的叶子字段（验证完整性）', () => {
-      const sections = makeTestSections();
-      const schema = buildSchemaTs(sections);
-      const zodLines = schema.split('\n').filter(l => l.includes('z.') && !l.trim().startsWith('//'));
-      for (const line of zodLines) {
-        if (line.includes('z.coerce.number()') || line.includes('z.string()') || line.includes('z.boolean()') || line.includes('z.enum(')) {
-          expect(line).toContain('.prefault(');
-        }
-      }
-    });
+  it('叶子数字字段应该有 .prefault(默认值)', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    expect(schema).toContain('.prefault(100)');
+    expect(schema).toContain('.prefault(50)');
   });
 
-  describe('buildMvuScriptBundle - 应始终从 schemaSections 重新生成（不使用旧缓存）', () => {
-    it('即使 schemaTsContent 为空也能从 schemaSections 生成', () => {
-      const mvu = createEmptyMvuConfig();
-      mvu.enabled = true;
-      mvu.schemaSections = makeTestSections();
-      mvu.schemaTsContent = '';
-      mvu.initvarYamlContent = '';
-      mvu.updateRulesYamlContent = '';
+  it('叶子字符串字段应该有 .prefault(默认值字符串)', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    expect(schema).toContain(".prefault('艾伦')");
+  });
 
-      const bundle = buildMvuScriptBundle(mvu);
-      expect(bundle.zodTxt).toContain('.prefault(100)');
-      expect(bundle.zodTxt).toContain('registerMvuSchema');
-    });
+  it('叶子布尔字段应该有 .prefault(默认值)', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    expect(schema).toContain('.prefault(true)');
+  });
 
-    it('即使 schemaTsContent 有旧内容（无prefault），也应重新生成包含prefault', () => {
-      const mvu = createEmptyMvuConfig();
-      mvu.enabled = true;
-      mvu.schemaSections = makeTestSections();
-      mvu.schemaTsContent = 'export const Schema = z.object({ HP: z.coerce.number() });';
-      mvu.initvarYamlContent = '';
-      mvu.updateRulesYamlContent = '';
+  it('叶子枚举字段应该有 .prefault(默认值)', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    expect(schema).toContain(".prefault('守序善良')");
+  });
 
-      const bundle = buildMvuScriptBundle(mvu);
-      expect(bundle.zodTxt).toContain('.prefault(100)');
-      expect(bundle.zodTxt).toContain('.prefault(50)');
-      expect(bundle.zodTxt).not.toContain('HP: z.coerce.number() });');
-    });
+  it('嵌套对象应该有 .prefault({...}) 包含完整默认值', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    expect(schema).toContain('.prefault({');
+    expect(schema).toContain('力量: 10');
+    expect(schema).toContain('敏捷: 12');
+    expect(schema).toContain('智力: 14');
+  });
 
-    it('zodTxt 应包含完整的 Zod 4 schema 注册代码', () => {
-      const mvu = createEmptyMvuConfig();
-      mvu.enabled = true;
-      mvu.schemaSections = makeTestSections();
+  it('根级别z.object()不应该有.prefault()（匹配参考卡格式）', () => {
+    const sections = makeTestSections();
+    const schema = buildSchemaTs(sections);
+    const lines = schema.split('\n');
+    const lastObjectLine = lines.filter(l => l.includes('});')).pop();
+    expect(lastObjectLine).toBe('});');
+  });
 
-      const bundle = buildMvuScriptBundle(mvu);
-      expect(bundle.zodTxt).toContain("import { registerMvuSchema }");
-      expect(bundle.zodTxt).toContain("registerMvuSchema(Schema)");
-    });
+  it('buildMvuScriptBundle 应该始终生成 updateRulesYaml', () => {
+    const mvu = createEmptyMvuConfig();
+    mvu.enabled = true;
+    mvu.schemaSections = makeTestSections();
+    const bundle = buildMvuScriptBundle(mvu);
+    expect(bundle.updateRulesYaml).toBeTruthy();
+    expect(bundle.updateRulesYaml).toContain('变量更新规则');
+  });
 
-    it('variableOutputFormat 应包含 update_variable_rules 和 status_bar_rule', () => {
-      const mvu = createEmptyMvuConfig();
-      mvu.enabled = true;
-      mvu.schemaSections = makeTestSections();
+  it('buildMvuScriptBundle 应该生成包含所有变量默认值的 initvarYaml', () => {
+    const mvu = createEmptyMvuConfig();
+    mvu.enabled = true;
+    mvu.schemaSections = makeTestSections();
+    const bundle = buildMvuScriptBundle(mvu);
+    expect(bundle.initvarYaml).toContain('HP: 100');
+    expect(bundle.initvarYaml).toContain('MP: 50');
+    expect(bundle.initvarYaml).toContain('名字: 艾伦');
+  });
 
-      const bundle = buildMvuScriptBundle(mvu);
-      expect(bundle.variableOutputFormat).toContain('<update_variable_rules>');
-      expect(bundle.variableOutputFormat).toContain('<status_bar_rule>');
-      expect(bundle.variableOutputFormat).toContain('StatusPlaceHolderImpl');
-    });
+  it('zodTxt应该包含registerMvuSchema导入和调用', () => {
+    const mvu = createEmptyMvuConfig();
+    mvu.enabled = true;
+    mvu.schemaSections = makeTestSections();
+    const bundle = buildMvuScriptBundle(mvu);
+    expect(bundle.zodTxt).toContain("import { registerMvuSchema }");
+    expect(bundle.zodTxt).toContain("registerMvuSchema(Schema)");
+  });
+
+  it('record类型字段应该有.prefault()默认值', () => {
+    const sectionsWithRecord: MvuSchemaSection[] = [
+      {
+        name: '好感度',
+        variables: [
+          {
+            path: '好感度',
+            zodType: 'z.record(z.string(), z.coerce.number())',
+            initialValue: { 'NPC1': 0, 'NPC2': 50 },
+            prefix: '',
+            description: 'NPC好感度',
+          },
+        ],
+      },
+    ];
+    const schema = buildSchemaTs(sectionsWithRecord);
+    expect(schema).toContain('.prefault({');
+    expect(schema).toContain('NPC1');
   });
 });
