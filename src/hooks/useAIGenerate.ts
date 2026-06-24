@@ -87,7 +87,7 @@ export function useAIGenerate() {
     nsfw?: boolean,
   ): Promise<string> => {
     const prompts = CHARACTER_GENERATE_PROMPT(characterName, hint, otherCharactersContext, alignment, nsfw, lang);
-    return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.85, max_tokens: 4000, presetMode: 'force' });
+    return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.85, presetMode: 'force' });
   }, []);
 
   /**
@@ -104,7 +104,7 @@ export function useAIGenerate() {
     nsfw?: boolean,
   ): Promise<string> => {
     const prompts = CHARACTER_GENERATE_PROMPT(characterName, hint, otherCharactersContext, alignment, nsfw, lang);
-    return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, max_tokens: 4000, presetMode: 'force' });
+    return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, presetMode: 'force' });
   }, []);
 
   /**
@@ -296,7 +296,7 @@ export function useAIGenerate() {
     nsfw?: boolean,
   ): Promise<string> => {
     const prompts = WORLD_RULES_GENERATE_PROMPT(cardName, characterSummaries, topic, existingRules, existingWorldbookContext, nsfw, lang);
-    return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.7, max_tokens: 4000, presetMode: 'force' });
+    return callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.7, presetMode: 'force' });
   }, []);
 
   /** Generate worldview constraints / operation rules with streaming */
@@ -310,7 +310,7 @@ export function useAIGenerate() {
     nsfw?: boolean,
   ): Promise<string> => {
     const prompts = WORLD_RULES_GENERATE_PROMPT(cardName, characterSummaries, topic, existingRules, existingWorldbookContext, nsfw, lang);
-    return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.7, max_tokens: 4000, presetMode: 'force' });
+    return callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.7, presetMode: 'force' });
   }, []);
 
   /**
@@ -443,7 +443,7 @@ export function useAIGenerate() {
     const userPrompt = prompts.user
       .replace('{currentDescription}', currentDescription)
       .replace('{instructions}', instructions);
-    return callAIWithPrompt(prompts.system, userPrompt, { temperature: 0.8, max_tokens: 4000, presetMode: 'force' });
+    return callAIWithPrompt(prompts.system, userPrompt, { temperature: 0.8, presetMode: 'force' });
   }, []);
 
   /**
@@ -485,7 +485,7 @@ export function useAIGenerate() {
       systemPrompt: string,
       userPrompt: string,
     ): Promise<string> => {
-      return callAIWithPrompt(systemPrompt, userPrompt, { temperature: 0.7, max_tokens: 4000, presetMode: 'force' });
+      return callAIWithPrompt(systemPrompt, userPrompt, { temperature: 0.7, presetMode: 'force' });
     }, []),
   };
 }

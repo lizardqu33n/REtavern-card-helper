@@ -100,7 +100,7 @@ router.post('/chat', async (req, res) => {
       model: model || 'gpt-3.5-turbo',
       messages,
       temperature: temperature ?? 0.8,
-      max_tokens: max_tokens ?? 2000,
+      max_tokens: max_tokens ?? 8000,
     };
 
     const response = await fetchWithTimeout(apiUrl, {

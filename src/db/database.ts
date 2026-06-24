@@ -91,7 +91,7 @@ export async function getAISettings(): Promise<AISettings> {
       apiUrl: 'https://api.openai.com/v1/chat/completions',
       apiKey: '',
       model: 'gpt-3.5-turbo',
-      maxTokens: 4000, // 提高默认值，避免输出被截断
+      maxTokens: 8000, // 提高默认值，避免输出被截断
       temperature: 0.8,
       keyVerified: false,
       retryCount: 3,
