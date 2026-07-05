@@ -8,7 +8,7 @@
  *   - Icons / manifest: Cache-first
  */
 
-const CACHE_NAME = 'tavern-card-helper-v47';
+const CACHE_NAME = 'tavern-card-helper-v48';
 
 const PRECACHE_URLS = [
   '/',

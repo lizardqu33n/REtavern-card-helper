@@ -11,7 +11,6 @@
  * This module runs on both Cloudflare Workers (Web APIs) and Node.js (@hono/node-server).
  */
 import { Hono } from 'hono';
-import { stream } from 'hono/streaming';
 
 const router = new Hono();
 
@@ -71,14 +70,18 @@ function validateOpenRouterKey(apiKey, upstreamUrl) {
   return { ok: true, key };
 }
 
+/** Return a JSON error response (used only for upstream errors or exceptions). */
+function jsonError(c, message, details, status) {
+  return c.json({ error: message, details }, status);
+}
+
 // ─── POST /models ─────────────────────────────────────────────────────────────
 // Fetch available models from the user's OpenAI-compatible endpoint.
 // Body: { apiUrl, apiKey } — apiUrl is already the /models endpoint
-// Returns: { models: [{ id, owned_by }] }
+// Returns: upstream /models JSON response, passed through unchanged.
 //
-// Streams the upstream response and extracts model IDs via regex scanning
-// to avoid a single large JSON.parse() that could exceed Cloudflare's 10ms
-// CPU limit when the upstream returns thousands of models.
+// Passing the response body straight through avoids JSON.parse() inside the
+// Worker, which is the main cause of CPU-time-limit errors on the free tier.
 router.post('/models', async (c) => {
   try {
     const { apiUrl, apiKey } = await c.req.json();
@@ -99,74 +102,11 @@ router.post('/models', async (c) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      return c.json({
-        error: `API 返回错误 ${response.status}`,
-        details: errorText,
-      }, response.status);
+      return jsonError(c, `API 返回错误 ${response.status}`, errorText, response.status);
     }
 
-    if (!response.body) {
-      return c.json({ error: 'API 未返回响应体' }, 502);
-    }
-
-    // Stream the upstream body and accumulate text in chunks. After each chunk,
-    // scan for "id":"..." patterns. This spreads CPU work across event-loop
-    // ticks (between awaits), staying within the per-request CPU sub-limit.
-    const models = [];
-    const seenIds = new Set();
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let totalBytes = 0;
-
-    // Matches "id":"model-name" (with optional whitespace, standard JSON escapes)
-    const idPattern = /"id"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        totalBytes += chunk.length;
-
-        // Scan buffer for model IDs. Keep last 64 bytes as carry-over to handle
-        // patterns split across chunks.
-        let match;
-        while ((match = idPattern.exec(buffer)) !== null) {
-          const id = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-          if (!seenIds.has(id)) {
-            seenIds.add(id);
-            models.push({ id, owned_by: '' });
-          }
-        }
-
-        // Trim processed portion but keep a small tail for cross-chunk patterns
-        if (buffer.length > 64) {
-          buffer = buffer.slice(-64);
-        }
-        // Reset regex lastIndex to start of remaining buffer
-        idPattern.lastIndex = 0;
-
-        // Safety cap: stop after 50MB to prevent runaway memory
-        if (totalBytes > 50_000_000) break;
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    // Final scan on remaining buffer
-    let match;
-    while ((match = idPattern.exec(buffer)) !== null) {
-      const id = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-      if (!seenIds.has(id)) {
-        seenIds.add(id);
-        models.push({ id, owned_by: '' });
-      }
-    }
-
-    return c.json({ models });
+    // Pass upstream response straight through (zero JSON parsing in Worker).
+    return response;
   } catch (err) {
     if (err.name === 'AbortError') {
       return c.json({ error: '请求超时，请检查 API 地址是否正确' }, 504);
@@ -179,6 +119,7 @@ router.post('/models', async (c) => {
 // ─── POST /chat ───────────────────────────────────────────────────────────────
 // Proxy an OpenAI-compatible chat completion request (non-streaming).
 // Body: { messages, apiUrl, apiKey, model, temperature, max_tokens }
+// Returns: upstream /chat/completions JSON response, passed through unchanged.
 router.post('/chat', async (c) => {
   try {
     const { messages, apiUrl, apiKey, model, temperature, max_tokens } = await c.req.json();
@@ -210,14 +151,11 @@ router.post('/chat', async (c) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      return c.json({
-        error: `AI API 返回错误 ${response.status}`,
-        details: errorText,
-      }, response.status);
+      return jsonError(c, `AI API 返回错误 ${response.status}`, errorText, response.status);
     }
 
-    const data = await response.json();
-    return c.json(data);
+    // Pass upstream response straight through (zero JSON parsing/serialization).
+    return response;
   } catch (err) {
     if (err.name === 'AbortError') {
       return c.json({ error: 'AI API 请求超时' }, 504);
@@ -229,10 +167,10 @@ router.post('/chat', async (c) => {
 
 // ─── POST /chat/stream ────────────────────────────────────────────────────────
 // Streaming chat completion via Server-Sent Events.
-// Same body as /chat, returns SSE stream with { choices: [{ delta: { content } }] }
+// Same body as /chat, returns upstream SSE stream, passed through unchanged.
 //
-// The upstream SSE stream is piped directly to the client as a ReadableStream.
-// This is efficient on Cloudflare Workers — no buffering, no CPU-intensive parsing.
+// We avoid Hono's stream() helper and manual heartbeat logic. The upstream SSE
+// stream is returned directly, so the Worker does almost no per-chunk work.
 router.post('/chat/stream', async (c) => {
   try {
     const { messages, apiUrl, apiKey, model, temperature, max_tokens } = await c.req.json();
@@ -257,87 +195,20 @@ router.post('/chat/stream', async (c) => {
       stream: true,
     };
 
-    const requestInit = {
+    const response = await fetchWithTimeout(apiUrl, {
       method: 'POST',
       headers: buildUpstreamHeaders(validation.key, apiUrl),
       body: JSON.stringify(requestBody),
-    };
-    const timeoutMs = timeoutForTokens(max_tokens, STREAM_TIMEOUT_BASE_MS, STREAM_TIMEOUT_MAX_MS);
+    }, timeoutForTokens(max_tokens, STREAM_TIMEOUT_BASE_MS, STREAM_TIMEOUT_MAX_MS));
 
-    // SSE headers — set before stream() returns the Response.
-    // Content-Encoding: Identity is required for Cloudflare Workers (see Hono docs).
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-    c.header('Content-Encoding', 'Identity');
+    if (!response.ok) {
+      const errorText = await response.text();
+      return jsonError(c, `AI API 返回错误 ${response.status}`, errorText, response.status);
+    }
 
-    const encoder = new TextEncoder();
-    const HEARTBEAT_INTERVAL_MS = 10_000;
-    const heartbeatBytes = encoder.encode(': heartbeat\n\n');
-
-    // Use Hono's official stream() helper — it correctly flushes chunks on
-    // both @hono/node-server (fixing the buffering truncation) and
-    // Cloudflare Workers. Manual ReadableStream was buffered by node-server.
-    return stream(c, async (stream) => {
-      // Initial heartbeat so the client sees activity immediately.
-      await stream.write(heartbeatBytes);
-
-      try {
-        const response = await fetchWithTimeout(apiUrl, requestInit, timeoutMs);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          const errPayload = JSON.stringify({
-            error: `AI API 返回错误 ${response.status}`,
-            details: errorText,
-          });
-          await stream.write(encoder.encode(`data: ${errPayload}\n\n`));
-          return;
-        }
-
-        if (!response.body) {
-          await stream.write(encoder.encode('data: {"error":"AI API 未返回流式响应体"}\n\n'));
-          return;
-        }
-
-        // Pipe upstream chunks with heartbeat keep-alive via Promise.race.
-        // The read promise is reused across races so we don't accumulate
-        // pending reads. Heartbeats reset intermediary idle timers during
-        // upstream "thinking" pauses.
-        const reader = response.body.getReader();
-        let readPromise = reader.read();
-
-        while (true) {
-          const raced = await Promise.race([
-            readPromise.then((r) => ({ ...r, isData: true })),
-            new Promise((resolve) =>
-              setTimeout(() => resolve({ isData: false }), HEARTBEAT_INTERVAL_MS)
-            ),
-          ]);
-
-          if (raced.isData) {
-            if (raced.done) break;
-            await stream.write(raced.value);
-            // Start the next read; the sleep promise is discarded by GC.
-            readPromise = reader.read();
-          } else {
-            // Heartbeat tick — keeps the connection alive.
-            await stream.write(heartbeatBytes);
-            // readPromise is still pending; the next race reuses it.
-          }
-        }
-      } catch (err) {
-        const msg = err.name === 'AbortError'
-          ? 'AI API 请求超时'
-          : `AI 代理流式请求失败：${err.message}`;
-        const errPayload = JSON.stringify({ error: msg });
-        try {
-          await stream.write(encoder.encode(`data: ${errPayload}\n\n`));
-        } catch {}
-      }
-    }, (err) => {
-      console.error('[AI Stream Proxy Error]', err.message);
-    });
+    // Pass upstream SSE stream straight through.
+    // The Worker only sets up the pipe; no per-chunk parsing or heartbeats.
+    return response;
   } catch (err) {
     if (err.name === 'AbortError') {
       return c.json({ error: 'AI API 请求超时' }, 504);
