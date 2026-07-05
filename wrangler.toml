@@ -1,0 +1,26 @@
+# Cloudflare Workers configuration
+# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "tavern-card-helper"
+main = "worker/index.js"
+compatibility_date = "2026-06-28"
+workers_dev = true
+preview_urls = false
+
+# Static Assets — serves the Vite build output (dist/) from Cloudflare's CDN.
+# - run_worker_first = ["/api/*"]: only /api/* requests invoke the Worker;
+#   all other requests are served as static files or SPA fallback (index.html).
+# - not_found_handling = "single-page-application": non-matching paths return
+#   index.html for client-side routing.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Environment variables (non-secret). Set via Cloudflare dashboard or:
+#   wrangler secret put CORS_ORIGINS
+# For local dev, create a .dev.vars file with:
+#   CORS_ORIGINS="https://yourdomain.com"
+[vars]
+# CORS_ORIGINS = "https://yourdomain.com,https://www.yourdomain.com"

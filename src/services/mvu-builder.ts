@@ -253,7 +253,7 @@ export function buildSchemaTs(sections: MvuSchemaSection[]): string {
  * The InitVar entry is disabled by default — initial values are set via EJS setvar in first_mes.
  */
 export function buildInitvarYaml(sections: MvuSchemaSection[]): string {
-  if (sections.length === 0) return '';
+  if (sections.length === 0) return '# MVU enabled but no variables defined\n_init: true';
 
   // Build nested object from sections
   const root: Record<string, unknown> = {};
@@ -675,7 +675,7 @@ export function buildMvuScriptBundle(mvu: MvuConfig): {
     : (mvu.schemaTsContent || '');
   const initvarYaml = mvu.schemaSections.length > 0
     ? buildInitvarYaml(mvu.schemaSections)
-    : (mvu.initvarYamlContent || '');
+    : (mvu.initvarYamlContent || '# MVU enabled but no variables defined\n_init: true');
   const updateRulesYaml = mvu.updateRules.length > 0
     ? buildUpdateRulesYaml(mvu.updateRules)
     : (mvu.updateRulesYamlContent || '变量更新规则: {}');

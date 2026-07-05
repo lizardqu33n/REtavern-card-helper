@@ -17,10 +17,12 @@ import { StepCharacters } from '../components/wizard/StepCharacters';
 import { StepWorldBook } from '../components/wizard/StepWorldBook';
 import { StepFirstMessage } from '../components/wizard/StepFirstMessage';
 import { StepMvuVariables } from '../components/wizard/StepMvuVariables';
+import { StepStagedMode } from '../components/wizard/StepStagedMode';
 import { StepPolishExport } from '../components/wizard/StepPolishExport';
-import { generateId, createEmptyLorebookEntry, createEmptyMvuConfig } from '../constants/defaults';
-import type { LorebookEntry, WizardCharacter } from '../constants/defaults';
+import { generateId, createEmptyDraft, createEmptyLorebookEntry, createEmptyMvuConfig, MVU_LOREBOOK_ENTRY_NAMES } from '../constants/defaults';
+import type { LorebookEntry, WizardCharacter, WizardDraft, StagedModeConfig } from '../constants/defaults';
 import { consumeAnalysisLorebookImport } from '../services/novel-analysis-service';
+import { findStagedLorebookEntryIndices } from '../services/card-exporter';
 import { useTranslation } from '../i18n/I18nContext';
 
 /** A single version in the character generation history */
@@ -317,6 +319,55 @@ ${e.content || ''}`)
     }
   };
 
+  /** Reset only the fields belonging to the current wizard step. */
+  const handleClearCurrentStep = () => {
+    if (!window.confirm(t('wizard.clearCurrentStepConfirm'))) return;
+
+    const empty = createEmptyDraft();
+    const updates: Partial<WizardDraft> = {};
+
+    switch (currentStep) {
+      case 1:
+        updates.cardName = empty.cardName;
+        updates.tags = empty.tags;
+        break;
+      case 2:
+        updates.characters = empty.characters;
+        break;
+      case 3:
+        updates.lorebookEntries = empty.lorebookEntries;
+        break;
+      case 4:
+        updates.mvu = empty.mvu;
+        updates.lorebookEntries = draft.lorebookEntries.filter(
+          (e) => !MVU_LOREBOOK_ENTRY_NAMES.includes(e.name) && !MVU_LOREBOOK_ENTRY_NAMES.includes(e.comment || ''),
+        );
+        break;
+      case 5:
+        updates.stagedMode = empty.stagedMode;
+        updates.worldbookNsfw = empty.worldbookNsfw;
+        {
+          const stagedIndices = findStagedLorebookEntryIndices(draft.lorebookEntries);
+          updates.lorebookEntries = draft.lorebookEntries.filter((_, idx) => !stagedIndices.has(idx));
+        }
+        break;
+      case 6:
+        updates.firstMessage = empty.firstMessage;
+        updates.alternate_greetings = empty.alternate_greetings;
+        updates.post_history_instructions = empty.post_history_instructions;
+        updates.creator_notes = empty.creator_notes;
+        break;
+      case 7:
+      default:
+        // 导出页无内部状态需要清空
+        return;
+    }
+
+    updateDraft(updates);
+    setStepError(null);
+    addToast('success', t('wizard.clearCurrentStepSuccess'));
+  };
+
   // ── Generate a specific character by index ───────────────
   const handleGenerateCharacter = async (index: number) => {
     const char = draft.characters[index];
@@ -582,7 +633,7 @@ ${e.content || ''}`)
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="animate-spin w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-3 border-[var(--color-primary)] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -640,9 +691,49 @@ ${e.content || ''}`)
             onChange={(mvu) => updateDraft({ mvu })}
             cardName={draft.cardName}
             characterDescriptions={characterDescriptions}
+            onApplyStageAxes={(axes, templateId) => {
+              const existing = draft.stagedMode?.characters || [];
+              const existingMap = new Map(existing.map((c) => [c.name, c]));
+              const newCharacters = axes.map((a) => {
+                const existingChar = existingMap.get(a.characterName);
+                return existingChar
+                  ? { ...existingChar, axisPath: a.axisPath }
+                  : {
+                      name: a.characterName,
+                      axisPath: a.axisPath,
+                      summary: '',
+                      axisType: 'number' as const,
+                      stages: [],
+                    };
+              });
+              updateDraft({
+                stagedMode: {
+                  ...(draft.stagedMode || { enabled: false, templateId: 'pure-love', dispatcherPrefix: '分阶段人设', characters: [] }),
+                  templateId: templateId as StagedModeConfig['templateId'],
+                  characters: newCharacters,
+                },
+              });
+            }}
           />
         );
       case 5:
+        return (
+          <StepStagedMode
+            stagedMode={draft.stagedMode ?? { enabled: false, templateId: 'pure-love', dispatcherPrefix: '分阶段人设', characters: [] }}
+            onChange={(stagedMode) => updateDraft({ stagedMode })}
+            cardName={draft.cardName}
+            mvu={draft.mvu}
+            lorebookEntries={draft.lorebookEntries}
+            onApplyEntries={(newEntries) => {
+              const newNames = new Set(newEntries.map((e) => e.comment));
+              const filtered = draft.lorebookEntries.filter((e) => !newNames.has(e.comment));
+              updateDraft({ lorebookEntries: [...filtered, ...newEntries] });
+            }}
+            nsfw={draft.worldbookNsfw}
+            onNsfwChange={(nsfw) => updateDraft({ worldbookNsfw: nsfw })}
+          />
+        );
+      case 6:
         return (
           <StepFirstMessage
             firstMessage={draft.firstMessage}
@@ -653,7 +744,7 @@ ${e.content || ''}`)
             mvu={draft.mvu}
           />
         );
-      case 6:
+      case 7:
         return (
           <StepPolishExport
             draft={draftWithCharacterEntries}
@@ -664,6 +755,7 @@ ${e.content || ''}`)
             onPngFileSelect={setPngBuffer}
             onFixEntries={(entries) => updateDraft({ lorebookEntries: entries })}
             onUpdateDraft={updateDraft}
+            onJumpToStep={setCurrentStep}
           />
         );
       default:
@@ -701,6 +793,7 @@ ${e.content || ''}`)
         onSave={handleSave}
         onSaveDraft={isEditMode ? undefined : saveDraftNow}
         onClear={isEditMode ? undefined : handleClear}
+        onClearStep={handleClearCurrentStep}
         stepError={stepError}
         saving={saving}
         extraActions={step2ExtraActions}

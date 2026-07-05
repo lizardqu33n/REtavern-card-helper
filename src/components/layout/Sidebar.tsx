@@ -1,7 +1,9 @@
 /**
  * Sidebar navigation component with SVG icons and polished interactions.
  * Mobile: slides in from left with overlay, closes on navigation.
+ * Includes focus trap and Escape key support for mobile accessibility.
  */
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Settings, Wand2, BookOpen, MessageCircle, PenTool, X, ScrollText, FileSearch } from 'lucide-react';
 import { BackgroundChanger } from '../shared/BackgroundChanger';
@@ -26,27 +28,71 @@ const navItems = (t: (key: string) => string) => [
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { t } = useTranslation();
+  const borderColor = 'rgba(255, 255, 255, 0.05)';
+  const faintText = 'color-mix(in srgb, var(--text-color) 40%, transparent)';
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Escape key to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
+
+  // Focus trap: keep Tab within sidebar when open on mobile
+  useEffect(() => {
+    if (!isOpen || !sidebarRef.current) return;
+    const sidebar = sidebarRef.current;
+    const focusable = sidebar.querySelectorAll<HTMLElement>(
+      'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    focusable[0].focus();
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
+
   return (
     <aside
+      ref={sidebarRef}
+      role="dialog"
+      aria-modal={isOpen}
+      aria-label={t('common.appName')}
       className={`
-        w-60 h-dvh sticky top-0 glass-sidebar flex flex-col shrink-0 z-50
-        /* Mobile: fixed overlay sidebar */
+        w-60 h-full sticky top-0 glass-sidebar flex flex-col shrink-0 z-50
         max-md:fixed max-md:inset-y-0 max-md:left-0
         max-md:transition-transform max-md:duration-300 max-md:ease-in-out
         ${isOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}
-        /* Desktop: always visible */
         md:translate-x-0 md:sticky
       `}
     >
       {/* App title + close button (mobile) */}
-      <div className="px-5 py-6 border-b border-white/5 flex items-center justify-between">
+      <div className="px-5 py-6 flex items-center justify-between" style={{ borderBottom: `1px solid ${borderColor}` }}>
         <div>
-          <h1 className="text-lg font-bold text-themed tracking-wide" style={{ color: 'var(--color-primary)' }}>
+          <h1
+            className="text-lg font-bold tracking-wide"
+            style={{ color: 'var(--color-primary)' }}
+          >
             {t('common.appName')}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">{t('home.subtitle')}</p>
+          <p className="text-xs mt-1" style={{ color: faintText }}>{t('home.subtitle')}</p>
         </div>
-        {/* Mobile close button */}
         <button
           onClick={onClose}
           className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -65,7 +111,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             end={item.end}
             onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200
+              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200
               ${isActive
                 ? 'text-themed'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -74,7 +120,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             style={({ isActive }) => isActive ? {
               backgroundColor: 'color-mix(in srgb, var(--color-primary) 15%, transparent)',
               color: 'var(--color-primary)',
-              textShadow: 'var(--text-shadow)'
+              textShadow: 'var(--text-shadow)',
             } : undefined}
           >
             <item.icon size={18} strokeWidth={1.8} />
@@ -84,10 +130,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-white/5 space-y-1">
+      <div className="px-3 py-2 space-y-1" style={{ borderTop: `1px solid ${borderColor}` }}>
         <BackgroundChanger sidebarOpen={isOpen} />
         <ThemeSettings sidebarOpen={isOpen} />
-        <p className="text-[10px] text-slate-600 px-2 pt-2 pb-1">{t('common.appName')} v1.0</p>
+        <p className="text-[10px] px-2 pt-2 pb-1" style={{ color: faintText }}>
+          {t('common.appName')} v1.0
+        </p>
       </div>
     </aside>
   );

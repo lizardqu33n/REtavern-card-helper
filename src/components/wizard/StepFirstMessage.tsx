@@ -206,7 +206,7 @@ export function StepFirstMessage({ firstMessage, cardName, characterDescriptions
               onClick={() => setTargetWordCount(preset.value)}
               className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                 targetWordCount === preset.value
-                  ? 'bg-indigo-600/30 border-indigo-500/50 text-indigo-300'
+                  ? 'bg-primary-tint-strong border-primary-tint text-primary-bright'
                   : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
               }`}
             >

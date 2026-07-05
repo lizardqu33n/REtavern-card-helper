@@ -16,7 +16,7 @@ export function HomePage() {
       description: t('home.actionCreateDesc'),
       action: () => navigate('/wizard'),
       gradient: 'from-indigo-500 to-purple-500',
-      glow: 'group-hover:shadow-indigo-500/20',
+      glow: 'group-hover:shadow-primary-glow',
     },
     {
       icon: BookOpen,
@@ -47,8 +47,10 @@ export function HomePage() {
   return (
     <div className="animate-fade-in">
       <div className="mb-6 sm:mb-10">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white">{t('home.title')}</h1>
-        <p className="mt-2 text-sm sm:text-base text-slate-400">
+        <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: 'var(--text-color)' }}>
+          {t('home.title')}
+        </h1>
+        <p className="mt-2 text-base sm:text-lg" style={{ color: 'color-mix(in srgb, var(--text-color) 60%, transparent)' }}>
           {t('home.subtitle')}
         </p>
       </div>
@@ -58,31 +60,45 @@ export function HomePage() {
           <button
             key={item.title}
             onClick={item.action}
-            className={`group text-left rounded-2xl border border-white/5 bg-slate-800/40 p-4 sm:p-6
-              hover:border-white/10 hover:bg-slate-800/60 hover:-translate-y-0.5
+            className={`group text-left rounded-2xl border p-4 sm:p-6
+              hover:-translate-y-0.5
               transition-all duration-300 ease-out cursor-pointer
-              shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 ${item.glow}`}
+              shadow-lg hover:shadow-xl ${item.glow}`}
+            style={{
+              borderColor: 'var(--color-border-subtle)',
+              backgroundColor: 'rgba(var(--card-bg-r), var(--card-bg-g), var(--card-bg-b), 0.4)',
+            }}
           >
             <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl
               bg-gradient-to-br ${item.gradient} text-white mb-5
               shadow-lg shadow-black/20 group-hover:scale-105 transition-transform duration-300`}>
               <item.icon size={22} strokeWidth={1.8} />
             </div>
-            <h3 className="text-base font-semibold text-white group-hover:text-indigo-300 transition-colors duration-200">
+            <h3 className="text-base font-semibold transition-colors duration-200 group-hover:text-primary-bright" style={{ color: 'var(--text-color)' }}>
               {item.title}
             </h3>
-            <p className="mt-2 text-sm text-slate-400 leading-relaxed">{item.description}</p>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: 'color-mix(in srgb, var(--text-color) 60%, transparent)' }}>
+              {item.description}
+            </p>
           </button>
         ))}
       </div>
 
       {/* Quick info section */}
-      <div className="mt-10 rounded-2xl border border-white/5 bg-slate-800/20 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">{t('home.quickStartTitle')}</h2>
-        <ol className="space-y-3 text-sm text-slate-400">
+      <div
+        className="mt-10 rounded-2xl border p-6"
+        style={{
+          borderColor: 'var(--color-border-subtle)',
+          backgroundColor: 'rgba(var(--card-bg-r), var(--card-bg-g), var(--card-bg-b), 0.2)',
+        }}
+      >
+        <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-color)' }}>
+          {t('home.quickStartTitle')}
+        </h2>
+        <ol className="space-y-3 text-sm" style={{ color: 'color-mix(in srgb, var(--text-color) 60%, transparent)' }}>
           {t('home.quickStartSteps').split('|').map((text, i) => (
             <li key={i} className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-500/15 text-indigo-400 text-xs font-bold flex items-center justify-center mt-0.5">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-tint-light text-primary-muted text-xs font-bold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
               <span className="leading-relaxed">{text}</span>

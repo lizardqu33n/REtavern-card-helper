@@ -1,12 +1,6 @@
 /**
  * LorebookEntryEditor - Single lorebook entry editor panel.
- *
- * Three-level expand for information density:
- *   Level 0 (collapsed): Header only — title, badge, position, keys preview, char count
- *   Level 1 (preview):   Title + content as read-only preview (compact, high density)
- *   Level 2 (edit):      Full editing form with all parameters
- *
- * Click header to cycle: collapsed → preview → edit → collapsed
+ * Density-aware editor: compact summary + explicit preview/edit actions
  */
 import { TextInput } from '../shared/TextInput';
 import { TextArea } from '../shared/TextArea';
@@ -22,14 +16,12 @@ import type { LorebookEntry, LorebookPosition } from '../../constants/defaults';
 
 export type EntryExpandLevel = 'collapsed' | 'preview' | 'edit';
 
-/** Determine trigger strategy badge */
 function getStrategyBadge(entry: LorebookEntry, t: (key: string) => string) {
-  if (entry.constant) return { icon: '🔵', label: t('lorebook.strategyConstant') };
-  if (entry.keys.length === 0) return { icon: '🔗', label: t('lorebook.strategyEmbed') };
-  return { icon: '🟢', label: t('lorebook.strategyTrigger') };
+  if (entry.constant) return { icon: '\uD83D\uDD35', label: t('lorebook.strategyConstant') };
+  if (entry.keys.length === 0) return { icon: '\uD83D\uDD17', label: t('lorebook.strategyEmbed') };
+  return { icon: '\uD83D\uDFE2', label: t('lorebook.strategyTrigger') };
 }
 
-/** Rough token estimate (~1.3 tokens per char for CJK) */
 function estimateTokens(text: string): number {
   return Math.round((text || '').length * 1.3);
 }
@@ -39,83 +31,91 @@ interface LorebookEntryEditorProps {
   index: number;
   onUpdate: (index: number, updates: Partial<LorebookEntry>) => void;
   onRemove: (index: number) => void;
-  /** Current expand level */
   expandLevel?: EntryExpandLevel;
-  /** Cycle expand level: collapsed → preview → edit → collapsed */
-  onCycleExpand?: () => void;
-  /** Whether this entry is currently being AI-expanded */
+  onSetLevel?: (level: EntryExpandLevel) => void;
   expanding?: boolean;
-  /** Callback to trigger AI expansion of this entry */
   onAiExpand?: () => void;
 }
 
-export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLevel, onCycleExpand, expanding, onAiExpand }: LorebookEntryEditorProps) {
+export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLevel, onSetLevel, expanding, onAiExpand }: LorebookEntryEditorProps) {
   const { t } = useTranslation();
   const badge = getStrategyBadge(entry, t);
   const isCollapsed = expandLevel === 'collapsed' || expandLevel === undefined;
   const isPreview = expandLevel === 'preview';
   const isEdit = expandLevel === 'edit';
   const hasExpandControl = expandLevel !== undefined;
+  const hasKeysIssue = !entry.constant && entry.keys.length === 0;
+  const hasContentIssue = !entry.content.trim();
+  const contentPreview = entry.content.trim().replace(/\s+/g, ' ').slice(0, 96);
 
-  const fieldCls = 'w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200';
-  const labelCls = 'text-xs text-slate-400';
-  const hintCls = 'text-[10px] text-slate-500 mt-0.5';
+  const borderColor = 'var(--color-border-default)';
+  const surfaceBg = 'rgba(var(--card-bg-r), var(--card-bg-g), var(--card-bg-b), 0.5)';
+  const mutedText = 'color-mix(in srgb, var(--text-color) 60%, transparent)';
+  const faintText = 'color-mix(in srgb, var(--text-color) 40%, transparent)';
+
+  const fieldCls = 'w-full rounded border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]';
+  const labelCls = 'text-xs';
+  const hintCls = 'text-[10px] mt-0.5';
 
   return (
-    <div className={`rounded-xl border bg-slate-800/50 overflow-hidden ${
+    <div className={`rounded-xl border overflow-hidden ${
       !entry.enabled ? 'border-slate-700/50 opacity-50' :
       entry.constant ? 'border-amber-700/60' : 'border-slate-700'
-    }`}>
-      {/* ── Header (always visible, clickable to cycle expand) ──────── */}
-      <div
-        className={`flex items-center justify-between gap-2 px-4 py-2.5 ${hasExpandControl ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
-        onClick={hasExpandControl ? onCycleExpand : undefined}
-      >
-        <div className="flex items-center gap-2 min-w-0">
+    }`} style={{ backgroundColor: surfaceBg }}>
+      {/* Header */}
+      <div className="px-3 sm:px-4 py-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="text-base">{badge.icon}</span>
+              <h3 className="text-sm font-semibold truncate max-w-full" style={{ color: 'var(--text-color)' }}>
+                {entry.name || t('lorebook.entryFallback', { index: String(index + 1) })}
+              </h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ color: mutedText, backgroundColor: 'rgba(51, 65, 85, 0.5)' }}>
+                {badge.label}
+              </span>
+              <span className="text-[10px] font-mono shrink-0" style={{ color: faintText }}>
+                {entry.position}
+              </span>
+              {hasKeysIssue && <span className="text-[10px] rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-300">缺触发词</span>}
+              {hasContentIssue && <span className="text-[10px] rounded bg-red-500/10 px-1.5 py-0.5 text-red-300">空内容</span>}
+              {entry.content && (
+                <span className="text-[10px] shrink-0" style={{ color: faintText }}>
+                  {entry.content.length}{t('common.words')} · {estimateTokens(entry.content)} tokens
+                </span>
+              )}
+            </div>
+            {isCollapsed && (
+              <div className="mt-1.5 flex flex-col gap-1 sm:flex-row sm:items-center">
+                {entry.keys.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {entry.keys.slice(0, 5).map((key, ki) => (
+                      <span key={ki} className="rounded bg-slate-800/75 px-1.5 py-0.5 text-[10px] font-mono text-slate-300">{key}</span>
+                    ))}
+                    {entry.keys.length > 5 && <span className="text-[10px]" style={{ color: faintText }}>+{entry.keys.length - 5}</span>}
+                  </div>
+                )}
+                {contentPreview && <p className="min-w-0 truncate text-[11px]" style={{ color: faintText }}>{contentPreview}{entry.content.length > 96 ? '...' : ''}</p>}
+              </div>
+            )}
+          </div>
+        <div className="flex flex-wrap items-center gap-1.5 sm:justify-end shrink-0" onClick={(e) => e.stopPropagation()}>
           {hasExpandControl && (
-            <span className="text-xs text-slate-500 shrink-0 transition-transform duration-200" style={{
-              transform: isCollapsed ? 'rotate(-90deg)' : isPreview ? 'rotate(0deg)' : 'rotate(90deg)'
-            }}>▼</span>
+            <div className="flex items-center rounded-lg border border-slate-700/70 bg-slate-950/35 p-0.5">
+              <button type="button" onClick={() => onSetLevel?.('collapsed')} className={`rounded px-2 py-1 text-[10px] transition-colors ${isCollapsed ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-200'}`}>紧凑</button>
+              <button type="button" onClick={() => onSetLevel?.('preview')} className={`rounded px-2 py-1 text-[10px] transition-colors ${isPreview ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-200'}`}>预览</button>
+              <button type="button" onClick={() => onSetLevel?.('edit')} className={`rounded px-2 py-1 text-[10px] transition-colors ${isEdit ? 'bg-primary-tint text-primary-bright' : 'text-slate-500 hover:text-slate-200'}`}>编辑</button>
+            </div>
           )}
-          <span className="text-base">{badge.icon}</span>
-          <h3 className="text-sm font-semibold text-white truncate">
-            {entry.name || t('lorebook.entryFallback', { index: String(index + 1) })}
-          </h3>
-          <span className="text-[10px] text-slate-500 bg-slate-700/50 px-1.5 py-0.5 rounded shrink-0">
-            {badge.label}
-          </span>
-          <span className="text-[10px] text-slate-600 font-mono shrink-0">
-            {entry.position}
-          </span>
-          {isCollapsed && entry.keys.length > 0 && (
-            <span className="text-[10px] text-slate-500 truncate max-w-[120px] shrink-0">
-              {entry.keys.slice(0, 3).join(', ')}{entry.keys.length > 3 ? '...' : ''}
-            </span>
-          )}
-          {isCollapsed && entry.content && (
-            <span className="text-[10px] text-slate-600 shrink-0">
-              {entry.content.length}{t('common.words')}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {isPreview && (
-            <span className="text-[10px] text-slate-500">{t('lorebook.clickExpand')}</span>
-          )}
-          {isEdit && (
-            <span className="text-[10px] text-slate-500">{t('lorebook.clickCollapse')}</span>
-          )}
-          {/* AI Expand button */}
           {onAiExpand && isCollapsed && entry.content.length > 0 && (
             <button
               onClick={onAiExpand}
               disabled={expanding}
               className="text-[10px] px-2 py-0.5 rounded bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {expanding ? '⏳' : `🦴→📖 ${t('lorebook.aiExpand')}`}
+              {expanding ? '\u23F3' : `\uD83E\uDEB6\u2192\uD83D\uDCD6 ${t('lorebook.aiExpand')}`}
             </button>
           )}
-          {/* Per-entry NSFW toggle for AI expansion */}
           {onAiExpand && isCollapsed && (
             <button
               onClick={() => onUpdate(index, { expandNsfw: !entry.expandNsfw })}
@@ -126,32 +126,30 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
               }`}
               title={entry.expandNsfw ? t('lorebook.nsfwToggleOn') : t('lorebook.nsfwToggleOff')}
             >
-              {entry.expandNsfw ? `🔞 ${t('common.nsfw')}` : `🛡️ ${t('common.safe')}`}
+              {entry.expandNsfw ? `\uD83D\uDD1E ${t('common.nsfw')}` : `\uD83D\uDEE1\uFE0F ${t('common.safe')}`}
             </button>
           )}
-          <label className="flex items-center gap-1 text-xs text-slate-400">
+          <label className="flex items-center gap-1 text-xs" style={{ color: mutedText }}>
             <input type="checkbox" checked={entry.enabled}
               onChange={(e) => onUpdate(index, { enabled: e.target.checked })}
-              className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+              className="rounded border-slate-600 bg-slate-800 text-primary" />
             {t('lorebook.enable')}
           </label>
-          <Button variant="danger" size="sm" onClick={() => onRemove(index)}>×</Button>
+          <Button variant="danger" size="sm" onClick={() => onRemove(index)}>&times;</Button>
         </div>
       </div>
+      </div>
 
-      {/* ── Level 1: Preview (title + content read-only) ────────────── */}
+      {/* Level 1: Preview */}
       {isPreview && (
-        <div className="px-4 pb-3 border-t border-slate-700/30 pt-2.5 space-y-2">
-          {/* Title display */}
+        <div className="px-4 pb-3 pt-2.5 space-y-2" style={{ borderTop: '1px solid rgba(51, 65, 85, 0.3)' }}>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 shrink-0">{t('lorebook.titleLabel')}：</span>
-            <span className="text-sm text-slate-200">{entry.name || `(${t('common.empty')})`}</span>
+            <span className="text-xs shrink-0" style={{ color: faintText }}>{t('lorebook.titleLabel')}:</span>
+            <span className="text-sm" style={{ color: 'var(--text-color)' }}>{entry.name || `(${t('common.empty')})`}</span>
           </div>
-
-          {/* Keys display */}
           {entry.keys.length > 0 && (
             <div className="flex items-start gap-2">
-              <span className="text-xs text-slate-500 shrink-0 pt-0.5">{t('lorebook.keysLabel')}：</span>
+              <span className="text-xs shrink-0 pt-0.5" style={{ color: faintText }}>{t('lorebook.keysLabel')}:</span>
               <div className="flex flex-wrap gap-1">
                 {entry.keys.map((key, ki) => (
                   <span key={ki} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300 font-mono">
@@ -161,15 +159,13 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
               </div>
             </div>
           )}
-
-          {/* Content preview */}
           {entry.content && (
             <div>
-              <span className="text-xs text-slate-500">{t('lorebook.contentLabel')}：</span>
-              <pre className="mt-1 text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto rounded-lg bg-slate-900/50 p-2.5 border border-slate-700/30">
+              <span className="text-xs" style={{ color: faintText }}>{t('lorebook.contentLabel')}:</span>
+              <pre className="mt-1 text-xs whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto rounded-lg p-2.5 border border-slate-700/30" style={{ color: 'color-mix(in srgb, var(--text-color) 80%, transparent)', backgroundColor: 'rgba(15, 23, 42, 0.5)' }}>
                 {entry.content}
               </pre>
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] mt-1" style={{ color: faintText }}>
                 {t('lorebook.charTokenEstimate', { chars: String(entry.content.length), tokens: String(estimateTokens(entry.content)) })}
               </p>
             </div>
@@ -177,12 +173,10 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
         </div>
       )}
 
-      {/* ── Level 2: Full Edit Form ────────────────────────────────── */}
+      {/* Level 2: Full Edit Form */}
       {isEdit && (
-        <div className="px-4 pb-4 space-y-3 border-t border-slate-700/30 pt-3">
-
-          {/* Title + constant toggle */}
-          <div className="grid grid-cols-[1fr,auto] gap-3">
+        <div className="px-4 pb-4 space-y-3 pt-3" style={{ borderTop: '1px solid rgba(51, 65, 85, 0.3)' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto] gap-3">
             <TextInput
               label={t('lorebook.titleLabel')}
               value={entry.name}
@@ -190,36 +184,34 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
               placeholder={t('lorebook.titlePlaceholder')}
             />
             <div className="flex flex-col gap-1 pt-5">
-              <label className="flex items-center gap-1 text-xs text-slate-300">
+              <label className="flex items-center gap-1 text-xs" style={{ color: 'color-mix(in srgb, var(--text-color) 80%, transparent)' }}>
                 <input type="checkbox" checked={entry.constant}
                   onChange={(e) => onUpdate(index, { constant: e.target.checked })}
-                  className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
-                🔵 {t('lorebook.constantLabel')}
+                  className="rounded border-slate-600 bg-slate-800 text-primary" />
+                &#x1F535; {t('lorebook.constantLabel')}
               </label>
             </div>
           </div>
 
-          {/* Keys */}
           {!entry.constant && (
-            <div className="grid grid-cols-[1fr,auto] gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto] gap-3">
               <TagInput
                 label={t('lorebook.keysLabel')}
                 tags={entry.keys}
                 onChange={(keys) => onUpdate(index, { keys })}
                 placeholder={t('lorebook.keysPlaceholder')}
               />
-              <div className="flex flex-col gap-1 pt-5 text-[10px] text-slate-500">
+              <div className="flex flex-col gap-1 pt-5 text-[10px]" style={{ color: faintText }}>
                 <label className="flex items-center gap-1">
                   <input type="checkbox" checked={entry.use_regex}
                     onChange={(e) => onUpdate(index, { use_regex: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.regexLabel')}
                 </label>
               </div>
             </div>
           )}
 
-          {/* Content editor */}
           <TextArea
             label={t('lorebook.contentLabel')}
             value={entry.content}
@@ -227,59 +219,64 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
             placeholder={t('lorebook.contentPlaceholder')}
             rows={3}
           />
-          <p className="text-[10px] text-slate-500 -mt-2">
+          <p className="text-[10px] -mt-2" style={{ color: faintText }}>
             {t('lorebook.charTokenEstimate', { chars: String((entry.content || '').length), tokens: String(estimateTokens(entry.content)) })}
           </p>
 
           {/* Trigger & Insertion parameters */}
-          <div className="border-t border-slate-700/50 pt-3">
-            <p className="text-[11px] font-medium text-slate-400 mb-2">{t('lorebook.triggerParams')}</p>
+          <div className="pt-3" style={{ borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
+            <p className="text-[11px] font-medium mb-2" style={{ color: mutedText }}>{t('lorebook.triggerParams')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className={labelCls}>{t('lorebook.positionLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.positionLabel')}</label>
                 <select value={entry.position}
                   onChange={(e) => onUpdate(index, { position: e.target.value as LorebookPosition })}
-                  className={fieldCls}>
+                  className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }}>
                   {LOREBOOK_POSITION_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.orderLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.orderLabel')}</label>
                 <input type="number" value={entry.insertion_order}
                   onChange={(e) => onUpdate(index, { insertion_order: parseInt(e.target.value) || 0 })}
-                  className={fieldCls} />
-                <p className={hintCls}>{t('lorebook.orderHint')}</p>
+                  className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                <p className={hintCls} style={{ color: faintText }}>{t('lorebook.orderHint')}</p>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.priorityLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.priorityLabel')}</label>
                 <input type="number" value={entry.priority}
                   onChange={(e) => onUpdate(index, { priority: parseInt(e.target.value) || 0 })}
-                  className={fieldCls} />
-                <p className={hintCls}>{t('lorebook.priorityHint')}</p>
+                  className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                <p className={hintCls} style={{ color: faintText }}>{t('lorebook.priorityHint')}</p>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.probabilityLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.probabilityLabel')}</label>
                 <div className="flex items-center gap-1.5">
                   <input type="range" min={0} max={100} step={5} value={entry.probability}
                     onChange={(e) => onUpdate(index, { probability: parseInt(e.target.value) })}
-                    className="flex-1 accent-indigo-600" />
-                  <span className="text-xs text-indigo-400 w-8 text-right">{entry.probability}%</span>
+                    className="flex-1 accent-[var(--color-primary)]" />
+                  <span className="text-xs text-primary-muted w-8 text-right">{entry.probability}%</span>
                 </div>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.depthLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.depthLabel')}</label>
                 <input type="number" min={0} value={entry.depth}
                   onChange={(e) => onUpdate(index, { depth: parseInt(e.target.value) || 0 })}
-                  className={fieldCls} />
-                <p className={hintCls}>{t('lorebook.depthHint')}</p>
+                  className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                <p className={hintCls} style={{ color: faintText }}>{t('lorebook.depthHint')}</p>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.roleLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.roleLabel')}</label>
                 <select value={entry.role}
                   onChange={(e) => onUpdate(index, { role: parseInt(e.target.value) || 0 })}
-                  className={fieldCls}>
+                  className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }}>
                   {LOREBOOK_ROLE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
@@ -290,24 +287,25 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
 
           {/* Advanced options */}
           <details className="text-sm">
-            <summary className="text-slate-500 cursor-pointer hover:text-slate-300">
+            <summary className="cursor-pointer hover:text-slate-300 transition-colors" style={{ color: faintText }}>
               {t('lorebook.advancedOptions')}
             </summary>
             <div className="mt-2 space-y-3">
               <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
-                <label className="flex items-center gap-1.5 text-xs text-slate-400 pt-2">
+                <label className="flex items-center gap-1.5 text-xs pt-2" style={{ color: mutedText }}>
                   <input type="checkbox" checked={entry.selective}
                     onChange={(e) => onUpdate(index, { selective: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.selectiveLabel')}
                 </label>
                 {entry.selective && (
                   <div className="space-y-2">
                     <select value={entry.selectiveLogic}
                       onChange={(e) => onUpdate(index, { selectiveLogic: parseInt(e.target.value) || 0 })}
-                      className={fieldCls}>
+                      className={fieldCls}
+                      style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }}>
                       {SELECTIVE_LOGIC_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                        <option key={opt.value} value={opt.value}>{opt.label} &mdash; {opt.desc}</option>
                       ))}
                     </select>
                     <TagInput
@@ -321,81 +319,87 @@ export function LorebookEntryEditor({ entry, index, onUpdate, onRemove, expandLe
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>{t('lorebook.groupLabel')}</label>
+                  <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.groupLabel')}</label>
                   <input type="text" value={entry.group || ''}
                     onChange={(e) => onUpdate(index, { group: e.target.value })}
                     className={fieldCls}
+                    style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }}
                     placeholder={t('lorebook.groupPlaceholder')} />
-                  <p className={hintCls}>{t('lorebook.groupHint')}</p>
+                  <p className={hintCls} style={{ color: faintText }}>{t('lorebook.groupHint')}</p>
                 </div>
                 <div>
-                  <label className={labelCls}>{t('lorebook.groupWeightLabel')}</label>
+                  <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.groupWeightLabel')}</label>
                   <input type="number" value={entry.group_weight}
                     onChange={(e) => onUpdate(index, { group_weight: parseInt(e.target.value) || 100 })}
-                    className={fieldCls} />
-                  <p className={hintCls}>{t('lorebook.groupWeightHint')}</p>
+                    className={fieldCls}
+                    style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                  <p className={hintCls} style={{ color: faintText }}>{t('lorebook.groupWeightHint')}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className={labelCls}>{t('lorebook.stickyLabel')}</label>
+                  <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.stickyLabel')}</label>
                   <input type="number" min={0} value={entry.sticky}
                     onChange={(e) => onUpdate(index, { sticky: parseInt(e.target.value) || 0 })}
-                    className={fieldCls} />
-                  <p className={hintCls}>{t('lorebook.stickyHint')}</p>
+                    className={fieldCls}
+                    style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                  <p className={hintCls} style={{ color: faintText }}>{t('lorebook.stickyHint')}</p>
                 </div>
                 <div>
-                  <label className={labelCls}>{t('lorebook.cooldownLabel')}</label>
+                  <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.cooldownLabel')}</label>
                   <input type="number" min={0} value={entry.cooldown}
                     onChange={(e) => onUpdate(index, { cooldown: parseInt(e.target.value) || 0 })}
-                    className={fieldCls} />
-                  <p className={hintCls}>{t('lorebook.cooldownHint')}</p>
+                    className={fieldCls}
+                    style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                  <p className={hintCls} style={{ color: faintText }}>{t('lorebook.cooldownHint')}</p>
                 </div>
                 <div>
-                  <label className={labelCls}>{t('lorebook.delayLabel')}</label>
+                  <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.delayLabel')}</label>
                   <input type="number" min={0} value={entry.delay}
                     onChange={(e) => onUpdate(index, { delay: parseInt(e.target.value) || 0 })}
-                    className={fieldCls} />
-                  <p className={hintCls}>{t('lorebook.delayHint')}</p>
+                    className={fieldCls}
+                    style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }} />
+                  <p className={hintCls} style={{ color: faintText }}>{t('lorebook.delayHint')}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-400">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: mutedText }}>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={entry.exclude_recursion}
                     onChange={(e) => onUpdate(index, { exclude_recursion: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.excludeRecursion')}
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={entry.prevent_recursion}
                     onChange={(e) => onUpdate(index, { prevent_recursion: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.preventRecursion')}
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={entry.match_whole_words}
                     onChange={(e) => onUpdate(index, { match_whole_words: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.matchWholeWords')}
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={entry.case_sensitive}
                     onChange={(e) => onUpdate(index, { case_sensitive: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.caseSensitive')}
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={entry.ignore_budget}
                     onChange={(e) => onUpdate(index, { ignore_budget: e.target.checked })}
-                    className="rounded border-slate-600 bg-slate-800 text-indigo-600" />
+                    className="rounded border-slate-600 bg-slate-800 text-primary" />
                   {t('lorebook.ignoreBudget')}
                 </label>
               </div>
               <div>
-                <label className={labelCls}>{t('lorebook.commentLabel')}</label>
+                <label className={labelCls} style={{ color: mutedText }}>{t('lorebook.commentLabel')}</label>
                 <input type="text" value={entry.comment || ''}
                   onChange={(e) => onUpdate(index, { comment: e.target.value })}
                   className={fieldCls}
+                  style={{ borderColor, backgroundColor: 'var(--input-bg)', color: 'var(--text-color)' }}
                   placeholder={t('lorebook.commentPlaceholder')} />
               </div>
             </div>

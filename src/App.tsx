@@ -18,6 +18,7 @@ const DialogueCreator = lazy(() => import('./pages/DialogueCreator').then(({ Dia
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(({ SettingsPage }) => ({ default: SettingsPage })));
 const PresetPage = lazy(() => import('./pages/PresetPage').then(({ PresetPage }) => ({ default: PresetPage })));
 const NovelAnalysisPage = lazy(() => import('./pages/NovelAnalysisPage').then(({ NovelAnalysisPage }) => ({ default: NovelAnalysisPage })));
+const NovelWorkshopPage = lazy(() => import('./components/novel-workshop').then(({ NovelWorkshop }) => ({ default: NovelWorkshop })));
 
 export default function App() {
   // Initialize background and theme on app load
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/dialogue" element={<DialogueCreator />} />
               <Route path="/novel-analysis" element={<NovelAnalysisPage />} />
+              <Route path="/novel-workshop" element={<NovelWorkshopPage />} />
               <Route path="/preset" element={<PresetPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

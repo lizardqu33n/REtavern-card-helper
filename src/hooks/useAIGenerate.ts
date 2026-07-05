@@ -21,8 +21,18 @@ import {
   CARD_DIAGNOSIS_PROMPT,
   MODIFY_CHARACTER_PROMPT,
   POLISH_SELECTION_PROMPT,
+  STAGED_LOREBOOK_PROMPT,
+  AUTO_STAGED_LOREBOOK_PROMPT,
+  STAGE_REROLL_PROMPT,
+  MULTI_CHAR_DETECT_PROMPT,
+  MULTI_CHAR_TEMPLATE_PROMPT,
+  STAGED_ANALYZE_PROMPT,
+  STAGE_REROLL_ANNOTATION_PROMPT,
+  STAGE_ENTRY_GENERATE_PROMPT,
+  stripMarkdownFences,
   parseAIJson,
 } from '../constants/prompts';
+import { type StageDefinition, sortStagesByDirection } from '../services/staged-lorebook-builder';
 import type {
   AIGeneratedCharacter,
   AIGeneratedLorebookEntry,
@@ -474,6 +484,93 @@ export function useAIGenerate() {
     diagnoseCard,
     modifyCharacterDescription,
     polishSelection,
+    /**
+     * 生成分阶段世界书的各阶段子条目内容（不含调度条目）。
+     * 调用方拿到 [{stageName, content}] 后，用 staged-lorebook-builder 组装最终条目。
+     */
+    generateStagedLorebook: useCallback(async (
+      cardName: string,
+      characterSummaries: string,
+      axisPath: string,
+      stages: StageDefinition[],
+      topic: string,
+      existingWorldbookContext: string,
+      nsfw: boolean,
+      onChunk?: StreamCallback,
+    ): Promise<Array<{ stageName: string; content: string }>> => {
+      const prompts = STAGED_LOREBOOK_PROMPT(
+        cardName, characterSummaries, axisPath, stages, topic, existingWorldbookContext, nsfw, lang,
+      );
+      const text = onChunk
+        ? await callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, presetMode: 'force' })
+        : await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.85, presetMode: 'force' });
+      const parsed = parseAIJson(text) as Array<{ stageName?: string; content?: string }> | null;
+      if (!parsed) return [];
+      // 按 stageName 对齐回输入顺序（AI 可能乱序）
+      const byName = new Map(parsed.map((p) => [p.stageName, p.content || '']));
+      return stages.map((s) => ({ stageName: s.name, content: byName.get(s.name) || '' }));
+    }, []),
+    /**
+     * AI reads existing worldbook and auto-generates full staged lorebook config
+     * (axisPath / axisType / numericDirection / stages with content).
+     */
+    autoGenerateStagedLorebook: useCallback(async (
+      cardName: string,
+      characterSummaries: string,
+      existingWorldbookContext: string,
+      topic: string,
+      nsfw: boolean,
+      onChunk?: StreamCallback,
+    ): Promise<{
+      axisPath: string;
+      axisType: 'enum' | 'number';
+      numericDirection: '>=' | '<=';
+      stages: StageDefinition[];
+    } | null> => {
+      const prompts = AUTO_STAGED_LOREBOOK_PROMPT(cardName, characterSummaries, existingWorldbookContext, topic, nsfw, lang);
+      const text = onChunk
+        ? await callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.8, presetMode: 'force' })
+        : await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.8, presetMode: 'force' });
+      const parsed = parseAIJson(text) as {
+        axisPath?: string;
+        axisType?: 'enum' | 'number';
+        numericDirection?: '>=' | '<=';
+        stages?: Array<{ name?: string; condition?: string; content?: string }>;
+      } | null;
+      if (!parsed?.axisPath || !parsed?.stages?.length) return null;
+      return {
+        axisPath: parsed.axisPath,
+        axisType: parsed.axisType === 'number' ? 'number' : 'enum',
+        numericDirection: parsed.numericDirection === '<=' ? '<=' : '>=',
+        stages: parsed.stages.map((s) => ({
+          name: s.name || '阶段',
+          condition: s.condition || '',
+          content: s.content || '',
+        })),
+      };
+    }, []),
+    /**
+     * Re-roll a single stage's content with optional guidance.
+     * Returns the new content string (plain text, not JSON).
+     */
+    rerollStage: useCallback(async (
+      cardName: string,
+      characterSummaries: string,
+      stageAxisPath: string,
+      stageName: string,
+      stageCondition: string,
+      siblingStages: Array<{ name: string; content?: string }>,
+      existingWorldbookContext: string,
+      guidance: string,
+      nsfw: boolean,
+      onChunk?: StreamCallback,
+    ): Promise<string> => {
+      const prompts = STAGE_REROLL_PROMPT(cardName, characterSummaries, stageAxisPath, stageName, stageCondition, siblingStages, existingWorldbookContext, guidance, nsfw, lang);
+      const text = onChunk
+        ? await callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, presetMode: 'force' })
+        : await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.85, presetMode: 'force' });
+      return stripMarkdownFences(text).trim();
+    }, []),
     /** Simple text generation for non-structured prompts (e.g. MVU beginner mode) */
     generateText: useCallback(async (
       systemPrompt: string,
@@ -481,5 +578,139 @@ export function useAIGenerate() {
     ): Promise<string> => {
       return callAIWithPrompt(systemPrompt, userPrompt, { temperature: 0.7, presetMode: 'force' });
     }, []),
+    /**
+     * Step 1 of multi-char template: AI reads worldbook and detects characters.
+     * Returns list of { name, comment, summary, suitable }.
+     */
+    detectCharacters: useCallback(async (
+      cardName: string,
+      existingWorldbookContext: string,
+      templateId: string,
+      templateName: string,
+    ): Promise<Array<{ name: string; comment: string; summary: string; suitable: boolean }>> => {
+      const prompts = MULTI_CHAR_DETECT_PROMPT(cardName, existingWorldbookContext, templateId, templateName, lang);
+      const text = await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.4, presetMode: 'force' });
+      const parsed = parseAIJson(text) as Array<{ name?: string; comment?: string; summary?: string; suitable?: boolean }> | null;
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((p) => p?.name)
+        .map((p) => ({
+          name: String(p.name),
+          comment: String(p.comment || ''),
+          summary: String(p.summary || ''),
+          suitable: p.suitable !== false,
+        }));
+    }, [lang]),
+    /**
+     * Step 2 of multi-char template: generate variables for confirmed characters.
+     * Returns { sections, updateRules, statusBar } raw AI output (unparsed to MvuConfig).
+     */
+    generateMultiCharVariables: useCallback(async (
+      cardName: string,
+      templateId: string,
+      templateName: string,
+      templateBlueprint: string,
+      characters: Array<{ name: string; summary: string }>,
+    ): Promise<{
+      sections: unknown[];
+      updateRules: unknown[];
+      statusBar?: { title?: string; showVariables?: string[]; styleHint?: string };
+    } | null> => {
+      const prompts = MULTI_CHAR_TEMPLATE_PROMPT(cardName, templateId, templateName, templateBlueprint, characters, lang);
+      const text = await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.5, presetMode: 'force' });
+      const parsed = parseAIJson(text) as { sections?: unknown[]; updateRules?: unknown[]; statusBar?: unknown } | null;
+      if (!parsed?.sections) return null;
+      return {
+        sections: parsed.sections,
+        updateRules: parsed.updateRules || [],
+        statusBar: parsed.statusBar as { title?: string; showVariables?: string[]; styleHint?: string } | undefined,
+      };
+    }, [lang]),
+
+    /** 分阶段模式：AI 剖析角色阶段框架 */
+    analyzeStages: useCallback(async (
+      cardName: string,
+      templateId: string,
+      existingWorldbookContext: string,
+      mvuVariablesContext: string,
+      userRequirement: string,
+    ): Promise<Array<{
+      name: string;
+      sourceComment?: string;
+      summary: string;
+      axisPath: string;
+      axisType: 'number' | 'enum';
+      numericDirection?: '>=' | '<=';
+      stages: Array<{ name: string; condition: string; annotation: string }>;
+    }> | null> => {
+      const prompts = STAGED_ANALYZE_PROMPT(cardName, templateId, existingWorldbookContext, mvuVariablesContext, userRequirement, lang);
+      const text = await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.5, presetMode: 'force' });
+      const parsed = parseAIJson(text) as { characters?: Array<{ name?: string; sourceComment?: string; summary?: string; axisPath?: string; axisType?: string; numericDirection?: string; stages?: Array<{ name?: string; condition?: string; annotation?: string }> }> } | null;
+      if (!parsed?.characters) return null;
+      return parsed.characters
+        .filter((c) => c.name && c.axisPath && Array.isArray(c.stages) && c.stages.length > 0)
+        .map((c) => ({
+          name: String(c.name),
+          sourceComment: c.sourceComment ? String(c.sourceComment) : undefined,
+          summary: String(c.summary || ''),
+          axisPath: String(c.axisPath),
+          axisType: (c.axisType === 'enum' ? 'enum' : 'number') as 'number' | 'enum',
+          numericDirection: (c.numericDirection === '<=' ? '<=' : '>=') as '>=' | '<=',
+          stages: sortStagesByDirection(
+            c.stages!
+              .filter((s) => s.name && s.condition)
+              .map((s) => ({
+                name: String(s.name),
+                condition: String(s.condition),
+                annotation: String(s.annotation || ''),
+              })),
+            c.axisType === 'enum' ? 'enum' : 'number',
+            c.numericDirection === '<=' ? '<=' : '>=',
+          ),
+        }));
+    }, [lang]),
+
+    /** 分阶段模式：重 roll 单个阶段的注解 */
+    rerollStageAnnotation: useCallback(async (
+      cardName: string,
+      templateId: string,
+      characterName: string,
+      characterSummary: string,
+      axisPath: string,
+      stageName: string,
+      stageCondition: string,
+      existingWorldbookContext: string,
+      guidance: string,
+    ): Promise<string | null> => {
+      const prompts = STAGE_REROLL_ANNOTATION_PROMPT(cardName, templateId, characterName, characterSummary, axisPath, stageName, stageCondition, existingWorldbookContext, guidance, lang);
+      const text = await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.9, presetMode: 'force' });
+      const clean = stripMarkdownFences(text).trim();
+      return clean || null;
+    }, [lang]),
+
+    /** 分阶段模式：为单个角色的所有阶段生成子条目内容 */
+    generateStageEntries: useCallback(async (
+      cardName: string,
+      templateId: string,
+      characterName: string,
+      characterSummary: string,
+      axisPath: string,
+      stages: Array<{ name: string; condition: string; annotation: string }>,
+      existingWorldbookContext: string,
+      nsfw: boolean,
+      guidance: string,
+      onChunk?: StreamCallback,
+    ): Promise<Array<{ stageName: string; content: string }>> => {
+      const prompts = STAGE_ENTRY_GENERATE_PROMPT(cardName, templateId, characterName, characterSummary, axisPath, stages, existingWorldbookContext, nsfw, guidance, lang);
+      const text = onChunk
+        ? await callAIWithPromptStreaming(prompts.system, prompts.user, onChunk, { temperature: 0.85, presetMode: 'force' })
+        : await callAIWithPrompt(prompts.system, prompts.user, { temperature: 0.85, presetMode: 'force' });
+      const parsed = parseAIJson(text) as { entries?: Array<{ stageName?: string; content?: string }> } | null;
+      if (!parsed?.entries) return [];
+      return stages.map((s) => {
+        const found = parsed.entries!.find((e) => e.stageName === s.name);
+        return { stageName: s.name, content: found?.content || '' };
+      });
+    }, [lang]),
   };
 }

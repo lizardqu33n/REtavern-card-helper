@@ -49,3 +49,16 @@ stagedog-tavern-helper-template/
 
 .vercel
 .env*
+
+# Cloudflare
+.wrangler
+.dev.vars
+
+# Debug / local workspace
+.dbg/
+.trae/
+_test_card.json
+_weicheng_card.json
+debug-worldbook-empty-stream.md
+_analyze*.mts
+_gen_test_card.mts

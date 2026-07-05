@@ -2,7 +2,7 @@
  * Step 3: World Book / Lorebook entries.
  * Full SillyTavern V2 + runtime parameter support (CardForge reference).
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '../shared/Button';
 import { useToast } from '../shared/Toast';
 import { AIProgressPanel, type AIProgressStatus } from '../shared/AIProgressPanel';
@@ -11,12 +11,21 @@ import { useTranslation } from '../../i18n/I18nContext';
 import { AIGeneratePanel } from './AIGeneratePanel';
 import { OrganizePreviewTable } from './OrganizePreviewTable';
 import { useAIGenerate } from '../../hooks/useAIGenerate';
-import { createEmptyLorebookEntry } from '../../constants/defaults';
+import { createEmptyLorebookEntry, MVU_LOREBOOK_ENTRY_NAMES } from '../../constants/defaults';
 import type { LorebookEntry, LorebookPosition, AIOrganizeSuggestion, MvuConfig } from '../../constants/defaults';
+import { findStagedLorebookEntryIndices } from '../../services/card-exporter';
 
 /** Rough token estimate (~1.3 tokens per char for CJK) */
 function estimateTokens(text: string): number {
   return Math.round((text || '').length * 1.3);
+}
+
+function getProtectedEntryLabel(entry: LorebookEntry, idx: number, stagedIndices: Set<number>): string | null {
+  const name = (entry.name || '').trim();
+  const comment = (entry.comment || '').trim();
+  if (MVU_LOREBOOK_ENTRY_NAMES.includes(name) || MVU_LOREBOOK_ENTRY_NAMES.includes(comment)) return 'MVU 系统';
+  if (stagedIndices.has(idx)) return '分阶段';
+  return null;
 }
 
 interface StepWorldBookProps {
@@ -57,30 +66,29 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
   const [expandLevels, setExpandLevels] = useState<Map<string, EntryExpandLevel>>(new Map());
   const { generateLorebookParsedStreaming, generateLorebookSkeletonStreaming, organizeEntries, generateEntryKeys, expandLorebookEntry } = useAIGenerate();
   const { addToast } = useToast();
+  const stagedIndices = useMemo(() => {
+    try {
+      return findStagedLorebookEntryIndices(entries);
+    } catch {
+      return new Set<number>();
+    }
+  }, [entries]);
 
-  /** Cycle expand level: collapsed → preview → edit → collapsed */
-  const cycleExpand = (id: string) => {
+  const setEntryLevel = (id: string, level: EntryExpandLevel) => {
     setExpandLevels(prev => {
       const next = new Map(prev);
-      const current = next.get(id) ?? 'collapsed';
-      const cycleMap: Record<EntryExpandLevel, EntryExpandLevel> = {
-        collapsed: 'preview',
-        preview: 'edit',
-        edit: 'collapsed',
-      };
-      const nextLevel = cycleMap[current];
-      if (nextLevel === 'collapsed') {
+      if (level === 'collapsed') {
         next.delete(id);
       } else {
-        next.set(id, nextLevel);
+        next.set(id, level);
       }
       return next;
     });
   };
 
-  const collapseAll = () => setExpandLevels(new Map(entries.map(e => [e.id, 'collapsed' as EntryExpandLevel])));
-  const expandAll = () => setExpandLevels(new Map());
-  const allCollapsed = entries.length > 0 && entries.every(e => (expandLevels.get(e.id) ?? 'collapsed') === 'collapsed');
+  const applyEntryView = (level: EntryExpandLevel) => {
+    setExpandLevels(level === 'collapsed' ? new Map() : new Map(entries.map(e => [e.id, level])));
+  };
 
   const addEntry = () => {
     onUpdate([...entries, createEmptyLorebookEntry()]);
@@ -373,12 +381,12 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
   return (
     <div>
       {/* Guidance banner */}
-      <div className="rounded-lg bg-indigo-900/20 border border-indigo-700/40 px-4 py-3 mb-4">
-        <p className="text-xs text-indigo-300 leading-relaxed">
+      <div className="rounded-lg bg-primary-tint-light border border-primary-tint-light px-4 py-3 mb-4">
+        <p className="text-xs text-primary-bright leading-relaxed">
           <span className="font-semibold">{t('worldBook.guidanceTitle')}</span>
           {t('worldBook.guidanceDesc')}
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-indigo-300/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-primary-muted">
           <p>✦ <strong>{t('worldBook.guidanceRule1')}</strong></p>
           <p>✦ <strong>{t('worldBook.guidanceRule2')}</strong></p>
           <p>✦ <strong>{t('worldBook.guidanceRule3')}</strong></p>
@@ -390,7 +398,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
 
       {/* Stats bar */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 text-[11px]">
-        <span className="bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded">{t('worldBook.totalEntries', { count: String(totalEntries) })}</span>
+        <span className="bg-primary-tint text-primary-bright px-2 py-0.5 rounded">{t('worldBook.totalEntries', { count: String(totalEntries) })}</span>
         <span className="bg-green-900/30 text-green-300 px-2 py-0.5 rounded">{t('worldBook.enabledEntries', { count: String(enabledEntries) })}</span>
         <span className="bg-amber-900/30 text-amber-300 px-2 py-0.5 rounded">{t('worldBook.constantEntries', { count: String(constantEntries) })}</span>
         <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{t('worldBook.tokenEstimate', { count: String(totalTokens) })}</span>
@@ -404,20 +412,22 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
       {/* Batch tools bar */}
       {entries.length > 0 && (
         <div className="space-y-3 mb-4">
-          <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-slate-900/40 border border-slate-700/50">
+          <div className="flex flex-col gap-2 p-3 rounded-lg bg-slate-900/40 border border-slate-700/50 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('worldBook.searchPlaceholder')}
-              className="min-w-[220px] flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-[var(--color-primary)] focus:outline-none sm:min-w-[220px]"
             />
             <Button variant="ghost" size="sm" onClick={sortEntries}>{t('worldBook.sortByOrder')}</Button>
             <Button variant="ghost" size="sm" onClick={enableAllEntries}>{t('worldBook.enableAll')}</Button>
             <Button variant="ghost" size="sm" onClick={disableEmptyKeyEntries}>{t('worldBook.disableEmptyKeys')}</Button>
             <Button variant="ghost" size="sm" onClick={cleanupEmptyEntries}>{t('worldBook.cleanupEmpty')}</Button>
-            <Button variant="ghost" size="sm" onClick={allCollapsed ? expandAll : collapseAll}>
-              {allCollapsed ? `📖 ${t('worldBook.expandAllEntries')}` : `📕 ${t('worldBook.collapseAll')}`}
-            </Button>
+            <div className="flex items-center gap-1 rounded-lg border border-slate-700/60 bg-slate-950/35 p-1">
+              <button type="button" onClick={() => applyEntryView('collapsed')} className="rounded px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200">紧凑</button>
+              <button type="button" onClick={() => applyEntryView('preview')} className="rounded px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200">摘要</button>
+              <button type="button" onClick={() => applyEntryView('edit')} className="rounded px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200">编辑</button>
+            </div>
           </div>
           {searchQuery && (
             <p className="text-[11px] text-slate-500">{t('worldBook.searchResults', { visible: String(visibleEntries.length), total: String(entries.length) })}</p>
@@ -427,7 +437,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
 
       {/* AI Tools bar */}
       {entries.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded-lg bg-amber-900/10 border border-amber-700/30">
+        <div className="flex flex-col gap-2 mb-4 p-3 rounded-lg bg-amber-900/10 border border-amber-700/30 sm:flex-row sm:flex-wrap sm:items-center">
           <span className="text-xs text-amber-300 font-medium shrink-0">🧹 {t('worldBook.aiToolsLabel')}</span>
           <Button
             variant="secondary"
@@ -462,7 +472,7 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">{t('worldBook.title')}</h2>
           <p className="text-sm text-slate-400 mt-1">
@@ -514,18 +524,24 @@ export function StepWorldBook({ entries, cardName, characterSummaries, existingW
         </div>
       )}
 
-      <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+      <div className="space-y-2 sm:space-y-3">
         {visibleEntries.map(({ entry, index }) => {
-          const isSkeleton = (entry.content || '').length < 120;
+          const protectedLabel = getProtectedEntryLabel(entry, index, stagedIndices);
           return (
-            <div key={entry.id}>
+            <div key={entry.id} className="relative">
+              {protectedLabel && (
+                <div className="mb-1 flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-violet-300">{protectedLabel}</span>
+                  <span>{t('worldBook.protectedEntryHint')}</span>
+                </div>
+              )}
               <LorebookEntryEditor
                 entry={entry}
                 index={index}
                 onUpdate={updateEntry}
                 onRemove={removeEntry}
                 expandLevel={expandLevels.get(entry.id) ?? 'collapsed'}
-                onCycleExpand={() => cycleExpand(entry.id)}
+                onSetLevel={(level) => setEntryLevel(entry.id, level)}
                 expanding={expandingIndex === index}
                 onAiExpand={() => handleExpandEntry(index)}
               />

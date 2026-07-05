@@ -319,13 +319,13 @@ export function DialogueCreator() {
               key={chat.id}
               className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors
                 ${currentChatId === chat.id
-                  ? 'bg-indigo-600/20 border border-indigo-500/30'
+                  ? 'bg-primary-tint-light border border-primary-tint-light'
                   : 'hover:bg-slate-800/50 border border-transparent'
                 }`}
               onClick={() => loadChat(chat.id!)}
             >
               <span className={`flex-1 text-sm truncate ${
-                currentChatId === chat.id ? 'text-indigo-300' : 'text-slate-400'
+                currentChatId === chat.id ? 'text-primary-bright' : 'text-slate-400'
               }`}>
                 {chat.title}
               </span>
@@ -372,7 +372,7 @@ export function DialogueCreator() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
             {messages.length === 0 && !isStreaming && (
@@ -400,7 +400,7 @@ export function DialogueCreator() {
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[90%] sm:max-w-[85%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm whitespace-pre-wrap leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-primary text-white'
                       : 'bg-slate-800 border border-slate-700 text-slate-200'
                   }`}>
                     {msg.content}
@@ -409,7 +409,7 @@ export function DialogueCreator() {
                       <div className="mt-2 pt-2 border-t border-slate-700/50 flex items-center gap-2">
                         <button
                           onClick={handleRegenerate}
-                          className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-400 transition-colors"
+                          className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-primary-muted transition-colors"
                           title={t('dialogue.regenerate')}
                         >
                           <RefreshCw size={12} />
@@ -424,7 +424,7 @@ export function DialogueCreator() {
 
             {isStreaming && (
               <div className="flex justify-start">
-                <div className="max-w-[90%] sm:max-w-[85%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm bg-slate-800 border border-slate-700 text-slate-200 whitespace-pre-wrap leading-relaxed">
+                <div className="max-w-[90%] sm:max-w-[85%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm bg-slate-800 border border-slate-700 text-slate-200 whitespace-pre-wrap leading-relaxed" style={{ willChange: 'contents' }}>
                   {streamingText || <span className="text-slate-400 animate-pulse">{t('dialogue.thinking')}</span>}
                 </div>
               </div>
@@ -439,7 +439,7 @@ export function DialogueCreator() {
               <textarea
                 ref={(el) => { textareaRef(el); (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el; }}
                 className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 text-sm text-slate-100
-                  placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500
+                  placeholder-slate-500 focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]
                   resize-none min-h-[38px] sm:min-h-[42px] max-h-[160px]"
                 value={inputValue}
                 onChange={(e) => {

@@ -262,7 +262,7 @@ export function ThemeSettings({ sidebarOpen }: { sidebarOpen?: boolean }) {
                           onClick={() => handleUpdate({ textColor: preset.value })}
                           className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
                             settings.textColor === preset.value
-                              ? 'border-indigo-400 scale-110'
+                              ? 'border-primary-tint scale-110'
                               : 'border-slate-600'
                           }`}
                           style={{ backgroundColor: preset.value }}
@@ -317,7 +317,7 @@ export function ThemeSettings({ sidebarOpen }: { sidebarOpen?: boolean }) {
                           onClick={() => handleUpdate({ inputBgColor: preset.value })}
                           className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
                             settings.inputBgColor === preset.value
-                              ? 'border-indigo-400 scale-110'
+                              ? 'border-primary-tint scale-110'
                               : 'border-slate-600'
                           }`}
                           style={{ 

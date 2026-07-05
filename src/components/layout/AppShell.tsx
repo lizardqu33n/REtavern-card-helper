@@ -7,6 +7,7 @@ import { Suspense, useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { useTranslation } from '../../i18n/I18nContext';
+import { Skeleton, SkeletonList } from '../shared/Skeleton';
 
 export function AppShell() {
   const { t } = useTranslation();
@@ -21,7 +22,7 @@ export function AppShell() {
   }, []);
 
   return (
-    <div className="flex w-full min-h-dvh">
+    <div className="flex w-full h-full">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -34,7 +35,7 @@ export function AppShell() {
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
 
       {/* Main content */}
-      <main className="flex-1 min-h-dvh overflow-auto">
+      <main className="flex-1 h-full min-h-0 overflow-y-auto" {...(sidebarOpen ? { inert: true } : {})}>
         {/* Mobile header bar */}
         <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 glass-header">
           <button
@@ -51,7 +52,7 @@ export function AppShell() {
           <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>{t('common.appName')}</span>
         </div>
 
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-8 py-4 sm:py-7">
           <Suspense fallback={<RouteFallback />}>
             <Outlet />
           </Suspense>
@@ -63,8 +64,10 @@ export function AppShell() {
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[320px] items-center justify-center">
-      <div className="h-8 w-8 rounded-full border-2 border-slate-700 border-t-[var(--color-primary)] animate-spin" />
+    <div className="animate-fade-in space-y-6 py-4">
+      <Skeleton variant="text" className="w-48 h-7" />
+      <Skeleton variant="text" className="w-72 h-4" />
+      <SkeletonList count={4} />
     </div>
   );
 }

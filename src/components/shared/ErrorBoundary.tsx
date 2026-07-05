@@ -12,13 +12,6 @@ interface State {
   retryCount: number;
 }
 
-/**
- * ErrorBoundary with auto-recovery for DOM reconciliation errors.
- *
- * NotFoundError / removeChild errors are typically caused by external DOM
- * interference (browser extensions, translation, autofill) and are not
- * reproducible code bugs. Auto-retry usually resolves them.
- */
 export class ErrorBoundary extends Component<Props, State> {
   static contextType = I18nContext;
   declare context: I18nContextValue;
@@ -36,7 +29,6 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ errorInfo });
     console.error('[ErrorBoundary]', error, errorInfo);
 
-    // Auto-retry for DOM reconciliation errors (up to 3 times)
     const isDomError =
       error.name === 'NotFoundError' ||
       error.message?.includes('removeChild') ||
@@ -45,7 +37,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
     if (isDomError && this.state.retryCount < 3) {
       console.warn(`[ErrorBoundary] DOM reconciliation error detected, auto-retrying (attempt ${this.state.retryCount + 1}/3)`);
-      // Force a clean re-render by resetting state
       setTimeout(() => {
         this.setState({ hasError: false, error: null, errorInfo: null, retryCount: this.state.retryCount + 1 });
       }, 100);
@@ -64,28 +55,37 @@ export class ErrorBoundary extends Component<Props, State> {
         this.state.error?.message?.includes('insertBefore');
 
       if (isDomError && this.state.retryCount < 3) {
-        // Show a brief retrying message instead of the full error page
         return (
-          <div className="flex items-center justify-center min-h-screen bg-slate-900">
+          <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
             <div className="text-center p-8">
-              <p className="text-sm text-slate-400">{this.context.t('errorBoundary.recovering')}</p>
+              <p className="text-sm" style={{ color: 'color-mix(in srgb, var(--text-color) 60%, transparent)' }}>
+                {this.context.t('errorBoundary.recovering')}
+              </p>
             </div>
           </div>
         );
       }
 
+      const borderColor = 'var(--color-border-default)';
+      const mutedText = 'color-mix(in srgb, var(--text-color) 60%, transparent)';
+
       return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
           <div className="max-w-2xl text-center space-y-4 p-8">
-            <p className="text-4xl">⚠</p>
-            <h1 className="text-xl font-bold text-white">{this.context.t('errorBoundary.title')}</h1>
-            <p className="text-sm text-slate-400">
+            <p className="text-4xl">&#x26A0;</p>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--text-color)' }}>
+              {this.context.t('errorBoundary.title')}
+            </h1>
+            <p className="text-sm" style={{ color: mutedText }}>
               {this.context.t('errorBoundary.description')}
             </p>
             {this.state.error && (
               <div className="text-left">
                 <p className="text-sm font-semibold text-red-300 mb-1">{this.state.error.message}</p>
-                <pre className="text-[11px] text-red-400/70 bg-slate-800 p-3 rounded-lg overflow-auto max-h-48 whitespace-pre-wrap break-all">
+                <pre
+                  className="text-[11px] text-red-400/70 p-3 rounded-lg overflow-auto max-h-48 whitespace-pre-wrap break-all"
+                  style={{ backgroundColor: 'var(--color-surface-raised)' }}
+                >
                   {this.state.error.stack}
                 </pre>
               </div>
@@ -93,19 +93,20 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleManualRetry}
-                className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition-colors"
+                className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-hover transition-colors"
               >
                 {this.context.t('errorBoundary.retry')}
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-slate-700 text-white text-sm rounded-lg hover:bg-slate-600 transition-colors"
+                className="px-4 py-2 text-white text-sm rounded-lg hover:bg-slate-600 transition-colors"
+                style={{ backgroundColor: 'var(--color-surface-elevated)' }}
               >
                 {this.context.t('errorBoundary.reload')}
               </button>
             </div>
             {isDomError && (
-              <p className="text-xs text-slate-500 mt-4">
+              <p className="text-xs mt-4" style={{ color: 'color-mix(in srgb, var(--text-color) 40%, transparent)' }}>
                 {this.context.t('errorBoundary.domErrorHint')}
               </p>
             )}

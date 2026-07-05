@@ -197,7 +197,7 @@ ${rules ? `\n## 世界观约束与运行规则（必须严格遵守）\n${rules}
 
 返回一个 JSON 数组，每个对象包含以下全部字段：
 {
-  "name": "条目标题（仅供人类参考）",
+  "name": "条目标题（精简准确，2-6字，如：临渊市灰产、欲望树组织、温水切片控制法）",
   "keys": ["关键词1", "关键词2", "关键词3"],
   "secondary_keys": [],
   "content": "详细条目内容，简体中文。使用键值对和列表格式，语句自然通顺。示例：\\n地点: XX城\\n总体氛围: 描述此地给 AI 扮演带来的基调\\n常见现象:\\n  - 现象一\\n  - 现象二\\n地区差异: 可给出不同情况",
@@ -284,7 +284,7 @@ export const LOREBOOK_SKELETON_PROMPT = (
   system: `你是一个 SillyTavern 世界书骨架生成器。产出【${batchSize}条】详细骨架。
 
 每条包含：
-- comment：标题（=== 标题 === 格式）
+- comment：标题（=== 标题 === 格式，精简准确，2-6字，如：临渊市灰产、欲望树组织、温水切片控制法）
 - content：详细设定概要（120-250字），用键值对格式，语句自然通顺（如"地点: XX\\n总体氛围: 描述此地对 AI 扮演的影响\\n常见现象:\\n  - 现象A\\n  - 现象B"），不要写散文
 - keys：2-4个触发词
 - strategy："selective"（绿灯/触发型）或 "constant"（蓝灯/常驻型）。由 AI 根据内容判断：核心世界观、全局规则、角色核心背景用 constant；具体技能、地点、物品、势力细节、可触发事件用 selective。
@@ -295,6 +295,8 @@ ${topic ? `\n【方向】：${topic}` : ''}
 ${rules ? `\n【世界观约束/已有世界书】：${rules}` : ''}
 
 【输出】：JSON数组 [{ "comment":"===标题===", "content":"详细设定概要(120-250字)", "keys":["词","词"], "strategy":"selective" }, ...]
+
+标题要求：精简准确，2-6字，如：临渊市灰产、欲望树组织、温水切片控制法。避免"XX时代 - 社会背景与系统性漏洞"这类冗长句式。
 
 写作要求：
 - 信息密集丰富、不重复、覆盖多维度（地点/人物/组织/物品/事件/规则/能力）。
@@ -339,7 +341,7 @@ export const EXPAND_ENTRY_PROMPT = (
 ${characterContext ? `\n【角色上下文】：\n${characterContext.substring(0, 3000)}` : ''}${nsfwBlock}
 
 【任务】：扩写/重写。输出JSON：
-{ "comment": "标题", "content": "详细设定（至少350字，使用键值对和列表格式，语句自然通顺）", "keys": ["触发词", "2-5个"], "strategy": "selective 或 constant", "position": ${entry.position} }
+{ "comment": "标题（精简准确，2-6字，如：临渊市灰产、欲望树组织、温水切片控制法）", "content": "详细设定（至少350字，使用键值对和列表格式，语句自然通顺）", "keys": ["触发词", "2-5个"], "strategy": "selective 或 constant", "position": ${entry.position} }
 
 蓝灯/绿灯判断：
 - 若原条目是核心世界观、全局规则、角色核心背景 → strategy="constant"（蓝灯常驻）
@@ -665,9 +667,22 @@ export const MVU_BEGINNER_GENERATE_PROMPT = (
   cardName: string,
   characterSummaries: string,
   userDescription: string,
+  templateId: string = '',
   lang: Language = 'zh',
 ) => ({
-  system: `你是一个 SillyTavern 角色卡的 MVU 变量系统生成器。根据用户描述的角色和场景，生成一套简洁的变量追踪系统。
+  system: `你是一个 SillyTavern 角色卡的 MVU 变量系统生成器。根据用户描述的角色和场景，生成一套简洁的变量追踪系统。` + (templateId ? `
+
+## 当前已选模板
+用户已在第一步选择了「${templateId}」模板。AI 生成变量时必须参考该模板的预设结构，确保变量与该模板强关联，尤其要兼容后续可能启用的「分阶段世界书」系统。
+
+### 模板变量要求
+- 甜宠纯爱（pure-love）：**只允许生成单一「关系.情感天平」变量**（0~100，0=初识，100=深爱），作为纯爱阶段轴，方向为单向递增（>=）。禁止生成好感度、信任度、心情、回忆点等其他变量。
+- 虐恋 NTR（ntr）：**只允许生成单一「关系.情感天平」变量**（0~100，0=纯洁，100=沉沦），作为堕落阶段轴，方向为单向递增（>=）。禁止生成堕落度、心理防线、羞耻感、第三者介入等其他变量。
+- 可纯爱可 NTR（dual-route）：**只允许生成一个可见变量「关系.情感天平」**（-100~100），0 附近为缓冲带（-20~20）。正向事件（>=）触发纯爱阶段，负向事件（<=）触发 NTR 阶段。允许额外生成 1~2 个隐藏布尔标记（"$" 前缀）：「关系.恶堕事件玩家方」「关系.被强制恶堕」，用于一次性特殊事件的防重复触发。禁止生成路线锁、抉择进度、第三者介入等其他可见变量。
+- 甜宠纯爱和虐恋 NTR 模板变量总数为 1 个；dual-route 模板为 1 个可见变量 + 最多 2 个隐藏标记。
+
+如果用户描述与模板方向明显相悖，仍以模板方向为准生成变量；若描述没提到具体变量，直接按上述要求生成。
+` : '') + `
 
 ## 输出格式
 你必须输出一个 JSON 对象（只输出 JSON，不要 markdown 代码块包裹），包含以下字段：
@@ -741,6 +756,231 @@ ${userDescription || '请根据角色信息自动设计合适的变量系统'}
 });
 
 /**
+ * Staged lorebook prompt (Step 3 - 分阶段世界书).
+ * Generates per-stage content for a stage-axis variable (enum or numeric).
+ * Output: JSON array of { stageName, content }.
+ *
+ * Used together with staged-lorebook-builder.ts which wraps the content into:
+ *   - 1 constant dispatcher entry (EJS if/else + getWorldInfo)
+ *   - N disabled child entries (one per stage)
+ */
+export const STAGED_LOREBOOK_PROMPT = (
+  cardName: string,
+  characterSummaries: string,
+  stageAxisPath: string,
+  stages: Array<{ name: string; condition?: string }>,
+  topic: string,
+  existingWorldbookContext: string,
+  nsfw: boolean,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位擅长为角色卡写"分阶段世界书"的创作者。这次任务不是写小说，而是给 AI 演员写"阶段说明书"——让它拿到后，知道在这个阶段里该怎么演这个角色。
+
+## 背景
+角色卡「${cardName}」用一个阶段轴变量 \`${stageAxisPath}\` 来推动剧情/人设变化。你要为下面每个阶段写一条子条目，调度条目会按变量值互斥地把对应内容喂给 AI。
+
+## 阶段轴
+${stages.map((s, i) => `${i + 1}. ${s.name}（触发：${s.condition}）`).join('\n')}
+
+## 怎么写（让 AI 演得出来）
+- **阶段要分得开**：每个阶段写出"只有到了这步才会出现"的状态、行为、语气。别写放之四海皆准的套话。
+- **写行为，不写标签**：不要贴"变得冷漠""开始依赖"这种结论，写"她回消息从秒回变成隔半天才回，回了也只有两三个字"这类可被 AI 直接复现的行为。
+- **给 AI 留余地**：多用"往往""可能""有时""在压力下"，少用"总是""一定""永远"。
+- **要有过渡感**：相邻阶段之间让读者/AI 能感受到"是怎么从上一阶段滑过来的"，但别写成固定剧情。
+- **不碰已有设定**：只补该阶段的差异信息，不翻案、不覆盖世界书里已经写好的东西。
+
+## 内容结构（每个阶段都尽量覆盖）
+- 心理状态：具体念头、反复出现的想法、身体感受，不要只写"她感到悲伤"。
+- 行为模式：可复现的动作、习惯、反应，2-4 条。
+- 对话风格：整体语气 + 2-3 句典型台词（用引号）。
+- 对他人的态度：用具体行为体现态度变化，1-2 条。
+- 触发/消退条件：什么情况下更容易进入或离开这个阶段，1-2 条。
+- 身体/环境细节：与该阶段相关的习惯性动作、表情、姿态、穿着或环境线索。
+
+## 禁词与禁用表达（会让输出变人机）
+不要写：
+- 模糊词：似乎、几乎、仿佛、如同、宛如、某种
+- 机械判断：该阶段角色表现为… / 角色会… / 在此阶段…（改成"她这时会…""到了这步…"）
+- 空泛形容词：极度、非常、特别、巨大的、深刻的
+- 廉价比喻：像小兽、心湖泛起涟漪、投石入湖
+- 模板微表情：嘴角上扬、眼里闪过光芒、指尖泛白、咬紧下唇
+- 八股句式：不是…而是… / 虽然…但是… / 在…的同时
+- 价值升华：最终明白了、终于懂得了、这一刻她意识到
+
+${nsfw
+    ? '## 成人内容\n本卡允许成人内容。涉及亲密或堕落描写时，从"为什么做"和"怎么做"入手，写得具体、有动机，不要标签式概括。'
+    : '## 内容安全\n本卡禁止成人向/性暗示内容。亲密关系用留白、暗示、边界感来处理，不要直接描写。'}
+
+## 角色信息
+${characterSummaries || '(未提供角色信息，请基于阶段名合理推断)'}
+
+${existingWorldbookContext ? `## 已有世界书（必须兼容）\n${existingWorldbookContext}` : ''}
+${topic ? `## 额外要求\n${topic}` : ''}
+
+## 输出格式
+只输出 JSON 数组，不要 markdown 代码块，不要解释：
+[
+  { "stageName": "${stages[0]?.name || '阶段1'}", "content": "该阶段内容，键值对格式，至少500字" },
+  ...
+]
+stageName 必须和上面给定的阶段名完全一致，顺序一致。`,
+  user: `为「${cardName}」的阶段轴 \`${stageAxisPath}\` 写 ${stages.length} 个阶段的子条目。每条至少 500 字，阶段之间要明显不同，用键值对格式，尽量丰富。`,
+});
+
+/**
+ * Auto staged lorebook prompt (Step 3 - AI 读世界书自动生成全套配置).
+ * Reads existing worldbook entries, picks a stage axis, generates full config:
+ *   - axisPath / axisType / numericDirection
+ *   - stages: [{ name, condition, content }]
+ *
+ * Output: single JSON object.
+ */
+export const AUTO_STAGED_LOREBOOK_PROMPT = (
+  cardName: string,
+  characterSummaries: string,
+  existingWorldbookContext: string,
+  topic: string,
+  nsfw: boolean,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位熟悉角色卡和世界书设计的创作者。这次要你先读已有的世界书和角色信息，找出剧情/人设里最自然的"变化轴"，然后自己设计一套分阶段世界书配置。
+
+## 你要做什么
+- 选一个合适的"阶段轴变量"（比如关系阶段、堕落度、时间线、心理天平）。
+- 把变化切成 3~6 个阶段，每个阶段给一段可被 AI 直接拿来演的说明书。
+
+## 阶段轴结构（必须按这个格式输出）
+- axisPath：点分路径，比如「关系.阶段」「堕落.阶段」「时间.阶段」。
+- axisType：'enum' 或 'number'。enum 适合离散的命名阶段，number 适合数值渐变。
+- numericDirection：只有 axisType='number' 时才用，'>=' 或 '<='。
+- stages：3~6 个阶段，每个含 name / condition / content。
+  - enum 阶段：condition 写成 \`=== '阶段名'\`
+  - number 阶段：condition 写成 \`>= 70\` 或 \`<= 20\`
+
+## 阶段顺序（至关重要）
+调度条目用 if/else if 判断，**一旦命中前面的条件，后面的条件就不会再执行**。所以 stages 数组必须按"从最极端到最初始"排序：
+- 如果 numericDirection 是 ">="：阈值从高到低排。例如 ">= 90"、">= 70"、">= 40"、">= 0"。
+- 如果 numericDirection 是 "<="：阈值从低到高排。例如 "<= -80"、"<= -40"、"<= 0"。
+- 输出前检查顺序，确保没有低阈值排在高阈值前面导致覆盖。
+
+## 怎么设计阶段
+- **从已有内容里找变化轴**：关系远近、心理状态、时间推进、堕落/救赎、势力归属等，选最能让人设产生明显差异的那个。
+- **阶段之间要拉开差距**：每个阶段的 content 必须写出"只有到了这步才会出现"的东西，不要各阶段长得差不多。
+- **写行为，不写标签**：不要给角色贴结论，要写具体可演的行为。比如不要写"她变得依赖"，要写"她开始下意识坐得离对方很近，对方离开时会反复看手机"。
+- **给变化留余地**：多用"往往""可能""有时""在压力下"，少用"总是""一定""永远"。
+- **有过渡感**：相邻阶段要让 AI 能感受到变化是怎么滑过来的，但别写成固定剧情。
+- **不翻案**：只补充各阶段的差异信息，不否定或覆盖已有世界书里的设定。
+
+## 每个阶段的内容结构（尽量覆盖）
+- 心理状态：具体念头、反复出现的想法、身体感受。
+- 行为模式：可复现的动作、习惯、反应，2-4 条。
+- 对话风格：整体语气 + 2-3 句典型台词（用引号）。
+- 对他人的态度：用具体行为体现态度变化，1-2 条。
+- 触发/消退条件：什么情况下更容易进入或离开这个阶段，1-2 条。
+- 身体/环境细节：与该阶段相关的习惯性动作、表情、姿态、穿着或环境线索。
+
+## 禁词与禁用表达（会让输出变人机）
+不要写：
+- 模糊词：似乎、几乎、仿佛、如同、宛如、某种
+- 机械判断：该阶段角色表现为… / 角色会… / 在此阶段…
+- 空泛形容词：极度、非常、特别、巨大的、深刻的
+- 廉价比喻：像小兽、心湖泛起涟漪、投石入湖
+- 模板微表情：嘴角上扬、眼里闪过光芒、指尖泛白、咬紧下唇
+- 八股句式：不是…而是… / 虽然…但是… / 在…的同时
+- 价值升华：最终明白了、终于懂得了、这一刻她意识到
+
+${nsfw
+    ? '## 成人内容\n本卡允许成人内容。涉及亲密或堕落描写时，从动机和具体行为入手，不要标签式概括。'
+    : '## 内容安全\n本卡禁止成人向/性暗示内容。亲密关系用留白、暗示、边界感处理。'}
+
+## 角色信息
+${characterSummaries || '(未提供角色信息，请基于世界书内容合理推断)'}
+
+## 已有世界书（必须兼容，作为设计依据）
+${existingWorldbookContext || '(无已有世界书，请基于角色信息自主设计)'}
+
+${topic ? `## 用户引导（必须遵循）\n${topic}` : ''}
+
+## 输出格式
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "axisPath": "关系.阶段",
+  "axisType": "enum",
+  "numericDirection": ">=",
+  "stages": [
+    { "name": "陌生人", "condition": "=== '陌生人'", "content": "该阶段内容，键值对格式，至少500字" },
+    { "name": "朋友", "condition": "=== '朋友'", "content": "..." },
+    ...
+  ]
+}
+stages 数量 3~6 个，content 至少 500 字，尽量丰富。`,
+  user: `读取「${cardName}」的已有世界书，找出最合适的阶段轴并生成整套分阶段世界书配置。每个阶段内容至少 500 字，尽量丰富。${topic ? `用户引导：${topic}` : ''}`,
+});
+
+/**
+ * Single-stage re-roll prompt (分阶段弹窗 - 单阶段重生).
+ * Regenerates one stage's content with optional guidance, keeping other stages intact.
+ *
+ * Output: plain text content (no JSON wrapper).
+ */
+export const STAGE_REROLL_PROMPT = (
+  cardName: string,
+  characterSummaries: string,
+  stageAxisPath: string,
+  stageName: string,
+  stageCondition: string,
+  siblingStages: Array<{ name: string; content?: string }>,
+  existingWorldbookContext: string,
+  guidance: string,
+  nsfw: boolean,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位熟悉角色卡的创作者。现在要重写「${cardName}」阶段轴 \`${stageAxisPath}\` 下的「${stageName}」阶段（触发条件：${stageCondition}），让这个阶段的条目更鲜活、更可演。
+
+## 同轴其他阶段（避开重复）
+${siblingStages.map((s) => `- ${s.name}：${(s.content || '').slice(0, 120)}...`).join('\n') || '(无其他阶段)'}
+
+## 怎么重写
+- **只动「${stageName}」**：写出"只有到了这步才会出现"的状态、行为、语气。
+- **写行为，不写标签**：把"变得冷漠"改成"她回消息从秒回变成隔半天，回了也只有两三个字"这类 AI 能直接复现的行为。
+- **衔接自然**：让 AI 能看出这个阶段是怎么从上一个阶段滑过来的，但别写成固定剧情。
+- **不翻案**：不否定已有世界书里的设定。
+- **至少 500 字**，尽量丰富。
+
+## 内容结构（尽量覆盖）
+- 心理状态：具体念头、反复出现的想法、身体感受。
+- 行为模式：可复现的动作、习惯、反应，2-4 条。
+- 对话风格：整体语气 + 2-3 句典型台词（用引号）。
+- 对他人的态度：用具体行为体现态度变化，1-2 条。
+- 触发/消退条件：什么情况下更容易进入或离开这个阶段，1-2 条。
+- 身体/环境细节：与该阶段相关的习惯性动作、表情、姿态、穿着或环境线索。
+
+## 禁词与禁用表达（会让输出变人机）
+不要写：
+- 模糊词：似乎、几乎、仿佛、如同、宛如、某种
+- 机械判断：该阶段角色表现为… / 角色会… / 在此阶段…
+- 空泛形容词：极度、非常、特别、巨大的、深刻的
+- 廉价比喻：像小兽、心湖泛起涟漪、投石入湖
+- 模板微表情：嘴角上扬、眼里闪过光芒、指尖泛白、咬紧下唇
+- 八股句式：不是…而是… / 虽然…但是… / 在…的同时
+- 价值升华：最终明白了、终于懂得了、这一刻她意识到
+
+${nsfw
+    ? '## 成人内容\n本卡允许成人内容。亲密或堕落描写从动机和具体行为入手，不要标签式概括。'
+    : '## 内容安全\n本卡禁止成人向/性暗示内容。亲密关系用留白、暗示、边界感处理。'}
+
+## 角色信息
+${characterSummaries || '(未提供)'}
+
+${existingWorldbookContext ? `## 已有世界书约束\n${existingWorldbookContext}` : ''}
+${guidance ? `## 用户引导（必须遵循）\n${guidance}` : ''}
+
+## 输出格式
+直接输出这个阶段的 content 内容（键值对格式），不要输出 JSON 外壳，不要 markdown 代码块，不要加阶段名前缀。`,
+  user: `重写「${stageName}」阶段的内容。${guidance ? `引导：${guidance}` : ''}`,
+});
+
+/**
  * Utility: strip markdown code fences from AI responses.
  * AI models often wrap JSON in ```json ... ``` blocks.
  */
@@ -754,7 +994,7 @@ export function stripMarkdownFences(text: string): string {
  * Sanitize common JSON issues in AI responses before parsing:
  * - Trailing commas before } or ]
  * - Single quotes instead of double quotes (simple heuristic)
- * - Unescaped newlines inside string values
+ * - Unescaped newlines / tabs / control characters inside string values
  */
 function sanitizeJsonString(raw: string): string {
   let s = raw.trim().replace(/^\uFEFF/, '');
@@ -765,7 +1005,47 @@ function sanitizeJsonString(raw: string): string {
   if (!s.includes('"') && s.includes("'")) {
     s = s.replace(/'([^']*)'/g, '"$1"');
   }
-  return s;
+
+  // Walk through the text and fix unescaped whitespace/control chars inside JSON strings.
+  let result = '';
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!inString) {
+      result += ch;
+      if (ch === '"') {
+        inString = true;
+        escaped = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      result += ch;
+      inString = false;
+      continue;
+    }
+    // Inside a JSON string value: escape raw whitespace/control characters.
+    if (ch === '\n') { result += '\\n'; continue; }
+    if (ch === '\r') { result += '\\r'; continue; }
+    if (ch === '\t') { result += '\\t'; continue; }
+    if (ch < ' ') {
+      // Drop other control characters (e.g. 0x00-0x08, 0x0b-0x0c, 0x0e-0x1f)
+      continue;
+    }
+    result += ch;
+  }
+  return result;
 }
 
 function tryParseJson(candidate: string): unknown | null {
@@ -875,4 +1155,326 @@ export function parseAIJson(text: string): unknown | null {
 
   return null;
 }
+
+/**
+ * Multi-char template prompt - Step 1: 识别角色.
+ * AI reads worldbook entries and returns a list of detected characters.
+ *
+ * Output: JSON array of { name, comment, summary, suitable }
+ */
+export const MULTI_CHAR_DETECT_PROMPT = (
+  cardName: string,
+  existingWorldbookContext: string,
+  templateId: string,
+  templateName: string,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是 SillyTavern 世界书分析师。任务：读取下面的已有世界书条目，识别出其中的"角色"条目（人名/人称/人设），排除掉场景/道具/设定/规则条目。
+
+## 判定规则
+- 角色条目：描述某个具体人物的设定（姓名、外貌、性格、身份、关系等）
+- 非角色条目：场景描述、世界设定、道具、规则、时间线、系统说明等
+- 适合性：判断该角色是否适合套用「${templateName}」模板（${templateId === 'ntr' ? '需要可堕落/可被介入的角色' : templateId === 'pure-love' ? '需要可发展感情的角色' : '需要可发展剧情的角色'}）
+
+## 输出格式
+只输出 JSON 数组，不加 markdown 代码块，不加解释：
+[
+  { "name": "角色名（用作变量前缀，须简短2-4字，去掉称谓后缀如同学/小姐）", "comment": "原条目 comment", "summary": "一句话概括角色身份", "suitable": true },
+  ...
+]
+suitable 为 boolean。若全部不适合，返回空数组 []。`,
+  user: `分析「${cardName}」的世界书，识别适合套用「${templateName}」模板的角色。
+
+## 已有世界书条目
+${existingWorldbookContext || '(无世界书)'}`,
+});
+
+/**
+ * Multi-char template prompt - Step 2: 多角色套模板生成变量.
+ * 对每个确认的角色，套用指定模板生成「角色名前缀」的变量组。
+ *
+ * Output: JSON object { sections, updateRules, statusBar }
+ */
+export const MULTI_CHAR_TEMPLATE_PROMPT = (
+  cardName: string,
+  templateId: string,
+  templateName: string,
+  templateBlueprint: string,
+  characters: Array<{ name: string; summary: string }>,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是 SillyTavern MVU 变量系统架构师。任务：对每个给定角色，套用「${templateName}」模板蓝图，生成以"角色名前缀"命名的独立变量组。
+
+## 模板蓝图（${templateName}）
+${templateBlueprint}
+
+## 待生成角色
+${characters.map((c, i) => `${i + 1}. ${c.name}：${c.summary}`).join('\n')}
+
+## 命名规则（必须遵循）
+- 每个角色的变量路径必须以该角色名开头作为前缀，如「${characters[0]?.name || '角色'}.情感天平」
+- 严禁使用通用前缀"角色"或"关系"，必须替换为具体角色名
+- 不同角色的变量必须独立，不共享
+- 同一模板下不同角色的变量结构保持一致（同样的变量名，只是前缀不同）
+
+## 输出格式
+只输出一个 JSON 对象，不加 markdown 代码块，不加解释：
+{
+  "sections": [
+    {
+      "name": "${characters[0]?.name || '角色'}",
+      "variables": [
+        { "path": "${characters[0]?.name || '角色'}.情感天平", "type": "number", "description": "...", "initialValue": 0, "rangeMin": 0, "rangeMax": 100, "categories": [{"range": ">= 90", "label": "深爱"}, {"range": ">= 75", "label": "恋人"}, {"range": ">= 60", "label": "暧昧"}, {"range": ">= 40", "label": "朋友"}, {"range": ">= 20", "label": "认识"}, {"range": ">= 0", "label": "陌生人"}] },
+        ...
+      ]
+    },
+    ...（每个角色一个 section，section.name = 角色名）
+  ],
+  "updateRules": [
+    { "path": "${characters[0]?.name || '角色'}.情感天平", "type": "number", "range": "0~100", "check": ["..."] },
+    ...
+  ],
+  "statusBar": {
+    "title": "状态栏标题（含 emoji）",
+    "showVariables": ["${characters[0]?.name || '角色'}.情感天平", ...],
+    "styleHint": "风格关键词"
+  }
+}
+
+## 规则
+- 严格按模板蓝图的变量结构生成，只是把通用前缀替换为角色名
+- 阶段轴变量必须用 number 类型 + categories 字段：categories 是阈值分段数组，每段含 {"range": ">= 阈值" 或 "<= 阈值", "label": "阶段名"}，顺序从高到低（或从极端到初始）
+- updateRules 的 check 规则中要把"角色"替换为对应角色名
+- dual-route（可纯爱可NTR）模板：每个角色的唯一可见变量是「角色名.情感天平」（-100~100），0附近 -20~20 为缓冲带；允许额外生成 1~2 个隐藏布尔标记（path 以 "$" 开头）：「角色名.恶堕事件玩家方」「角色名.被强制恶堕」，初始 false，仅用于一次性特殊事件防重复
+- 隐藏标记的 updateRule：初始 false，仅在对应特殊事件触发时设为 true，日常互动不修改
+- statusBar.showVariables 只显示可见变量，隐藏标记（"$"前缀）不显示；每个角色显示最关键的 1-2 个可见变量
+- 若角色超过 3 个，状态栏只显示前 3 个角色的关键变量`,
+  user: `为「${cardName}」的 ${characters.length} 个角色套用「${templateName}」模板，生成多角色变量组。`,
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 分阶段模式（StepStagedMode）提示模板
+// ──────────────────────────────────────────────────────────────────────────
+
+const STAGED_TEMPLATE_LABELS: Record<string, string> = {
+  'pure-love': '纯爱（情感天平 0~100 单向递增）',
+  'ntr': 'NTR（情感天平 0~100 单向递增）',
+  'dual-route': '双路线（情感天平 -100~100，正值走纯爱，负值走NTR）',
+};
+
+/**
+ * 阶段框架剖析：AI 读取已有世界书 + MVU 变量 + 用户要求，
+ * 为每个适合的角色剖析出阶段轴变量 + 阶段划分（含可修改阈值 + 简单人设/剧情注解）。
+ */
+export const STAGED_ANALYZE_PROMPT = (
+  cardName: string,
+  templateId: string,
+  existingWorldbookContext: string,
+  mvuVariablesContext: string,
+  userRequirement: string,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位擅长拆解角色弧光的创作者。现在请你读下面的世界书和 MVU 变量，找出适合「${STAGED_TEMPLATE_LABELS[templateId] || templateId}」这条线的角色，然后为每个角色搭一个"阶段轴"框架。
+
+## 你要输出什么
+对每个合适角色，给出：
+1. 一个已定义的 MVU 变量当"阶段轴"（优先 number 类型，比如好感度、堕落度、情感天平）。
+2. 把变量切成若干阶段（用阈值区间，如 ">= 90" / "<= -80"），给每个阶段起个阶段名。
+3. 每个阶段写一句 20-40 字的注解，描述角色在这个阶段里的心理或行为状态。
+
+## 怎么识别角色
+- 含具体人名 + 人设 + 与主角关系 = 角色。
+- 只写场景/道具/世界观 = 跳过。
+- 角色要适合当前标签：
+  - 纯爱线：能与主角发展浪漫/亲密情感的角色。
+  - NTR 线：与主角有情感羁绊且存在被夺走/堕落可能性的角色。
+  - 双路线：同时满足以上两种潜力的角色。
+
+## 双路线默认设定（重要）
+- 默认状态下，女主**没有被对手攻略过**，也没有与对方发生过亲密关系。
+- 正向（纯爱）阶段只写女主与主角之间的情感推进，**不要预设女主是“公交车”、曾是敌方玩物、有过NTR历史等背景**。
+- 负向（NTR）阶段可以写对手试图介入、女主逐渐动摇或被攻陷的过程，但要从当前阶段开始写，不要默认过去已经发生。
+- 只有用户引导词明确要求时，才允许给女主加上“曾被攻略”“曾是玩物”等历史设定。
+
+## 根据模板选阶段轴（变量必须契合）
+当前模板为「${STAGED_TEMPLATE_LABELS[templateId] || templateId}」，选择阶段轴时请严格匹配模板预设变量，不要乱用其他模板变量：
+- 纯爱模板（pure-love）：阶段轴必须是「关系.情感天平」（0~100），方向为递增（>=）。
+- NTR 模板（ntr）：阶段轴必须是「关系.情感天平」（0~100），方向为递增（>=）。
+- 双路线模板（dual-route）：阶段轴必须是单一 -100~100 的「关系.情感天平」（或多角色模式下的「角色名.情感天平」），0 附近 -20~20 为缓冲带/中立，正值方向触发纯爱阶段，负值方向触发 NTR 阶段。
+- 三个模板都只使用「情感天平」这一个变量作为阶段轴，不要选取或创建其他变量作为阶段轴。隐藏事件标记（如「关系.恶堕事件玩家方」）只用于一次性事件防重，不作为阶段轴。
+
+## 阶段怎么切
+- 阶段轴变量必须是 number 类型，用 ">=" 或 "<=" 阈值分段。
+- 4-9 个阶段，覆盖从初始到极端的完整变化。
+- 双路线模板用 -100~100 双向轴：负向走 NTR，正向走纯爱，-20~20 为缓冲带/中立，避免日常小波动反复横跳。
+- 纯爱模板用 0~100 单向递增；NTR 模板用 0~100 单向递增。
+- 阈值区间要连续、不重叠、覆盖全范围。
+- condition 格式：">= 阈值" 或 "<= 阈值"，不要外层括号。
+
+## 阶段顺序（至关重要）
+调度条目用 if/else if 判断，**一旦命中前面的条件，后面的条件就不会再执行**。所以 stages 数组必须按"从最极端到最初始"排序：
+- 如果 numericDirection 是 ">="：阈值从高到低排。例如 stages 依次为 ">= 90"、">= 70"、">= 40"、">= 0"。
+- 如果 numericDirection 是 "<="：阈值从低到高排。例如 stages 依次为 "<= -80"、"<= -40"、"<= 0"。
+- 你必须在输出前检查这个顺序，确保没有低阈值排在高阈值前面导致覆盖。
+
+## 注解怎么写（避免人机感）
+- 写状态，不写结论。比如不要写"她陷入爱恋"，要写"她开始把对方的消息置顶，看到名字会下意识地笑"。
+- 20-40 字，一句完整的话。
+- 不要用：似乎、仿佛、极度、深刻、最终明白了、终于懂得了。
+
+## 输出格式
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "characters": [
+    {
+      "name": "角色名",
+      "sourceComment": "来源世界书条目 comment",
+      "summary": "一句话身份概括",
+      "axisPath": "角色名.变量名（必须与 MVU 变量路径完全一致）",
+      "axisType": "number",
+      "numericDirection": ">=" 或 "<=",
+      "stages": [
+        { "name": "阶段名", "condition": ">= 90", "annotation": "20-40字的状态描述" },
+        ...
+      ]
+    }
+  ]
+}`,
+  user: `卡片名：「${cardName}」
+剧情标签：${STAGED_TEMPLATE_LABELS[templateId] || templateId}
+
+【已有世界书条目】
+${existingWorldbookContext || '（无）'}
+
+【MVU 已定义变量】
+${mvuVariablesContext || '（无，请提醒用户先在 MVU 步骤定义变量）'}
+
+【用户要求】
+${userRequirement || '（无特殊要求，按模板默认弧光剖析）'}
+
+请为适合这条线的每个角色搭出阶段框架。`,
+});
+
+/**
+ * 单个阶段注解重 roll：为指定角色的某个阶段重新生成人设/剧情注解。
+ */
+export const STAGE_REROLL_ANNOTATION_PROMPT = (
+  cardName: string,
+  templateId: string,
+  characterName: string,
+  characterSummary: string,
+  axisPath: string,
+  stageName: string,
+  stageCondition: string,
+  existingWorldbookContext: string,
+  guidance: string,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位擅长抓角色状态的创作者。请为「${characterName}」的「${stageName}」阶段重新写一句注解。
+
+## 角色
+${characterName}：${characterSummary}
+
+## 阶段
+- 阶段轴变量：${axisPath}
+- 阶段名：${stageName}
+- 触发条件：${stageCondition}
+- 剧情标签：${STAGED_TEMPLATE_LABELS[templateId] || templateId}。
+- 注解方向必须与当前模板「${STAGED_TEMPLATE_LABELS[templateId] || templateId}」保持一致：纯爱模板写情感推进，NTR 模板写堕落/防线崩塌，双路线模板按阶段所在轴写纯爱或 NTR 倾向。
+
+## 怎么写
+- 20-40 字，一句完整的话。
+- 写具体状态，不要写结论。比如不要写"她开始动摇"，要写"她开始避开对方的视线，却总在人群里第一个找到他"。
+- 阈值越极端，状态越深入、越具体。
+- 不要用：似乎、仿佛、极度、深刻、最终明白了、终于懂得了。
+${guidance ? `- 用户引导：${guidance}` : ''}
+
+只输出注解文本本身，不要引号、不要 markdown、不要解释。`,
+  user: `卡片「${cardName}」，重 roll「${characterName}」的「${stageName}」阶段注解。`,
+});
+
+/**
+ * 阶段世界书生成：为每个角色的每个阶段生成详细的人设/剧情子条目内容，
+ * 并由前端用参考卡风格的 EJS 调度条目 + getWorldInfo() 拉取子条目。
+ */
+export const STAGE_ENTRY_GENERATE_PROMPT = (
+  cardName: string,
+  templateId: string,
+  characterName: string,
+  characterSummary: string,
+  axisPath: string,
+  stages: Array<{ name: string; condition: string; annotation: string }>,
+  existingWorldbookContext: string,
+  nsfw: boolean,
+  guidance: string,
+  _lang: Language = 'zh',
+) => ({
+  system: `你是一位擅长为角色卡写阶段人设的创作者。现在为「${characterName}」的每个阶段写一份"AI 演员能直接拿来演"的子条目，调度条目会用 getWorldInfo() 按需拉取。
+
+## 角色
+${characterName}：${characterSummary}
+
+## 阶段轴
+变量：${axisPath}，剧情标签：${STAGED_TEMPLATE_LABELS[templateId] || templateId}
+
+## 阶段列表
+${stages.map((s, i) => `${i + 1}. ${s.name}（${s.condition}）：${s.annotation}`).join('\n')}
+
+## 路线默认与变量契合
+当前模板为「${STAGED_TEMPLATE_LABELS[templateId] || templateId}」，每个阶段的内容必须与阶段轴变量保持一致，不能写出与变量方向相反的人设：
+${templateId === 'pure-love'
+  ? `- 纯爱模板使用单一 0~100「情感天平」作为阶段轴（单向递增）：阶段内容要写女主与主角之间的情感推进，天平值越高（阶段越靠后）关系越亲密、越专一。
+- 不要预设女主有 NTR 历史、曾是敌方玩物或“公交车”等背景，除非用户引导词明确要求。`
+  : templateId === 'ntr'
+  ? `- NTR 模板使用单一 0~100「情感天平」作为阶段轴（单向递增）：阶段内容要写女主心理防线逐步崩塌、与第三者关系逐渐加深的过程，天平值越高堕落越深。
+- 可以从当前阶段开始写对手试图介入、女主逐渐动摇或被攻陷，但不要默认女主过去就已经是玩物（除非用户引导词明确要求）。`
+  : `- 双路线模板使用单一 -100~100「情感天平」作为阶段轴：阶段条件为 ">=" 时写纯爱侧（对主角好感递增），阶段条件为 ">=" 且阈值在负区时写 NTR 侧（向第三者/堕落滑落）。
+- -20~20 为缓冲带/中立阶段：情感未定，日常互动不会大幅摆动，只有明确指向纯爱或NTR的情节才会跨区。
+- 纯爱侧：主角真诚关心、保护、尊重、亲密、共同回忆，或女主主动靠近 → 天平正向增长。
+- NTR侧（敌人受益的"正面"互动）：主角帮情敌还债/向威胁屈服/牺牲女主利益/让女主单独面对威胁/敌人 → 天平负向滑落。
+- NTR侧（主角负面行为）：主角欺骗/背叛/冷落/主动伤害/暴力 → 天平负向滑落。
+- 特殊事件：当剧情出现「玩家方触发恶堕事件（背叛/伤害/主动推向他人）」或「女主被胁迫/强制发生恶堕事件」时，天平会一次性大幅下跌（-30~-50）。"NTR·沦陷"及以后阶段可视为已发生重大转折，但要从当前阶段开始写，不要默认过去已经发生。
+- 默认女主**没有被对手攻略过**，也没有与对方发生过亲密关系。
+- 正向/纯爱阶段只写女主与主角之间的情感推进，**禁止默认女主是“公交车”、曾是敌方玩物、有过NTR历史等背景**。
+- 只有用户引导词明确要求时，才允许加入“曾被攻略”“曾是玩物”等历史设定。`}
+
+## 每个阶段的内容结构（键值对 + 自然段混合，作为 content 字段的字符串值，尽量覆盖）
+- 心理动态：用具体念头、反复出现的想法、身体感受来表现，不要写"她感到悲伤"这种结论。2-4 条。
+- 行为模式：写 AI 能直接复现的动作、习惯、反应。比如"她开始下意识把对方的消息置顶"，而不是"她开始在意对方"。3-5 条。
+- 对话风格：该阶段说话的整体语气 + 3-5 句典型台词（用引号包裹）。台词要符合性格和当下心理状态，不要写成鸡汤或宣言。
+- 对其他角色的态度：态度变化用具体行为体现，1-2 条。
+- 触发/消退条件：什么情境下更容易进入或离开这个阶段，1-2 条。
+- 身体/环境细节：与该阶段相关的习惯性动作、表情、姿态、穿着、环境线索或生理反应，2-3 条。
+- 记忆/闪回：该阶段容易想起什么、被什么触发，1-2 条。
+
+## 怎么写才不像人机
+- 阶段之间要明显不同，每个阶段写出"只有到了这步才会出现"的东西。
+- 给变化留余地：多用"往往""可能""有时""在压力下"，少用"总是""一定""永远"。
+- 不写固定剧情，只写状态和倾向。
+- 内容要饱满：每个阶段 400-800 字，信息密度高，不要一句话带过。
+
+## 禁词与禁用表达
+不要写：
+- 模糊词：似乎、几乎、仿佛、如同、宛如、某种
+- 机械判断：该阶段角色表现为… / 角色会… / 在此阶段…
+- 空泛形容词：极度、非常、特别、巨大的、深刻的
+- 廉价比喻：像小兽、心湖泛起涟漪、投石入湖
+- 模板微表情：嘴角上扬、眼里闪过光芒、指尖泛白、咬紧下唇
+- 八股句式：不是…而是… / 虽然…但是… / 在…的同时
+- 价值升华：最终明白了、终于懂得了、这一刻她意识到
+
+${guidance ? `## 用户引导（必须遵循）\n${guidance}\n` : ''}## 内容边界
+- ${nsfw ? '允许成人内容。NTR/堕落向阶段可以从动机和具体行为入手写露骨描写，不要标签式概括。' : '禁止成人向露骨内容。亲密关系用暗示、留白、边界感处理。'}
+
+## 输出格式
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "entries": [
+    { "stageName": "阶段名", "content": "该阶段的子条目内容。用键值对+自然段混合，\\n 换行，作为 content 字段的字符串值。" },
+    ...
+  ]
+}
+entries 数组顺序与输入阶段列表一致。`,
+  user: `为「${cardName}」的「${characterName}」写 ${stages.length} 个阶段的子条目内容。`,
+});
 

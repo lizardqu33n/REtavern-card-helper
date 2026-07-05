@@ -248,11 +248,17 @@ async function buildPayload(options: AIRequestOptions): Promise<{ payload: AIReq
     throw new Error('请先在 AI 设置中填写 API 地址');
   }
 
+  const trimmedKey = (settings.apiKey || '').trim();
+  // OpenRouter 必须有 Key，提前在客户端拦截
+  if (apiUrl.includes('openrouter.ai') && !trimmedKey) {
+    throw new Error('使用 OpenRouter 必须填写 API 密钥，请先在设置中保存 Key');
+  }
+
   return {
     payload: {
       messages: injectPreset(options.messages, options.presetMode),
       apiUrl: normalizeApiUrl(apiUrl),
-      apiKey: settings.apiKey,
+      apiKey: trimmedKey,
       model: settings.model?.trim() || DEFAULT_MODEL,
       temperature: options.temperature ?? settings.temperature,
       max_tokens: normalizeMaxTokens(options.max_tokens ?? settings.maxTokens),
@@ -268,7 +274,16 @@ async function readProxyError(response: Response, fallback: string): Promise<str
   try {
     const parsed = JSON.parse(raw) as { error?: string; details?: string };
     const detail = parsed.details ? `：${parsed.details.slice(0, 300)}` : '';
-    return `${parsed.error || fallback}${detail}`;
+    let errorMsg = `${parsed.error || fallback}${detail}`;
+    // 401 鉴权失败：给出更具体的提示
+    if (response.status === 401) {
+      errorMsg += '\n\n请检查：\n1. API 密钥是否正确且未过期\n2. 切换渠道后是否重新输入了新渠道的 Key\n3. 前往设置页面重新保存密钥';
+    }
+    // 403 地区限制或权限不足
+    if (response.status === 403) {
+      errorMsg += '\n\n可能原因：\n1. 该模型在你所在地区不可用（如 OpenAI 系列模型在部分地区受限），请换用其他模型（如 deepseek/deepseek-chat）\n2. 你的 API Key 权限不足，无法使用该模型\n3. 该模型需要额外开通或付费';
+    }
+    return errorMsg;
   } catch {
     return `${fallback}：${raw.slice(0, 300)}`;
   }
@@ -430,6 +445,13 @@ async function streamAIOnce(
   onChunk: StreamCallback,
   existingFullText: string = '',
 ): Promise<StreamCallResult> {
+  // #region debug-point A:stream-init
+  const __dbg = (h: string, msg: string, data?: unknown) =>
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'worldbook-empty-stream', runId: 'pre', hypothesisId: h, location: 'ai-service.ts:streamAIOnce', msg: '[DEBUG] ' + msg, data, ts: Date.now() }),
+    }).catch(() => {});
+  // #endregion
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -439,6 +461,10 @@ async function streamAIOnce(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      // #region debug-point A:response-status
+      __dbg('A', 'response status', { status: response.status, ok: response.ok, attempt });
+      // #endregion
 
       if (!response.ok) {
         const errMsg = await readProxyError(response, `AI API 流式调用失败 (${response.status})`);
@@ -454,6 +480,10 @@ async function streamAIOnce(
       if (!response.body) {
         throw new Error('AI 流式响应为空');
       }
+
+      // #region debug-point A:stream-start
+      __dbg('A', 'stream body acquired', { attempt });
+      // #endregion
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -476,7 +506,13 @@ async function streamAIOnce(
 
           if (line.startsWith('data:')) {
             const data = line.slice(5).trim();
+            // #region debug-point B:sse-data-line
+            __dbg('B', 'sse data line', { dataPreview: data.slice(0, 400), isDone: data === '[DONE]' });
+            // #endregion
             if (data === '[DONE]') {
+              // #region debug-point A:done-received
+              __dbg('A', 'received [DONE]', { fullTextLength: fullText.length, finishReason, receivedAnyData });
+              // #endregion
               if (!fullText.trim()) {
                 throw new Error('AI 返回了空内容（流式响应无数据）');
               }
@@ -507,26 +543,43 @@ async function streamAIOnce(
                 textFromContentParts(parsed.output_text) ||
                 textFromContentParts(parsed.response);
 
+              // #region debug-point C:content-extracted
+              __dbg('C', 'content extracted', { contentLength: content.length, hasDeltaContent: !!textFromContentParts(choice?.delta?.content), hasMessageContent: !!textFromContentParts(choice?.message?.content), hasDeltaText: !!textFromContentParts(choice?.delta?.text), hasChoiceText: !!textFromContentParts(choice?.text), hasParsedText: !!textFromContentParts(parsed.text), hasOutputText: !!textFromContentParts(parsed.output_text), hasResponse: !!textFromContentParts(parsed.response), finishReason });
+              // #endregion
+
               if (content) {
                 receivedAnyData = true;
                 fullText += content;
                 onChunk(content, existingFullText + fullText);
               }
             } catch (parseErr) {
+              // #region debug-point D:parse-error
+              __dbg('D', 'sse data parse error', { error: parseErr instanceof Error ? parseErr.message : String(parseErr), dataPreview: data.slice(0, 400) });
+              // #endregion
               if (parseErr instanceof Error && parseErr.message.startsWith('AI API 返回错误')) {
                 throw parseErr;
               }
               // skip other malformed JSON
             }
+          } else {
+            // #region debug-point D:non-data-line
+            __dbg('D', 'non-data sse line', { linePreview: line.slice(0, 200) });
+            // #endregion
           }
         }
       }
 
       if (!fullText.trim()) {
+        // #region debug-point A:stream-end-empty
+        __dbg('A', 'stream ended but fullText empty', { receivedAnyData, finishReason });
+        // #endregion
         throw new Error('AI 返回了空内容（流结束但无数据）');
       }
       return { fullText, finishReason };
     } catch (err: unknown) {
+      // #region debug-point E:stream-error
+      __dbg('E', 'stream error caught', { error: err instanceof Error ? err.message : String(err), attempt });
+      // #endregion
       if (attempt < maxRetries && isRetryableError(err)) {
         lastError = err instanceof Error ? err : new Error('网络请求失败');
         await new Promise(r => setTimeout(r, retryDelay(attempt)));

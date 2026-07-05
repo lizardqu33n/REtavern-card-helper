@@ -175,7 +175,7 @@ export function NovelAnalysisPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <BookMarked className="text-emerald-300" size={22} />
+              <BookMarked className="text-status-success" size={22} />
               <h1 className="text-2xl font-bold text-slate-100">{t('novel.title')}</h1>
             </div>
             <p className="mt-2 text-sm text-slate-400">
@@ -203,7 +203,7 @@ export function NovelAnalysisPage() {
           <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-slate-300">{t('novel.tokenModeLabel')}</label>
-              <span className="text-xs text-emerald-300">{t('novel.currentTokens', { count: outputMaxTokens.toLocaleString() })}</span>
+              <span className="text-xs text-status-success">{t('novel.currentTokens', { count: outputMaxTokens.toLocaleString() })}</span>
             </div>
             <div className="grid gap-2 sm:grid-cols-4">
               {TOKEN_MODE_OPTIONS(t).map((option) => (
@@ -269,13 +269,13 @@ export function NovelAnalysisPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
-                  <span className="text-amber-300/80 font-mono">
+                  <span className="text-status-warning/80 font-mono">
                     {t('novel.elapsedTime', { time: `${Math.floor(elapsedSeconds / 60).toString().padStart(2, '0')}:${(elapsedSeconds % 60).toString().padStart(2, '0')}` })}
                   </span>
-                  <span className="text-amber-300/80 font-mono">
+                  <span className="text-status-warning/80 font-mono">
                     {t('novel.charCount', { count: String(streamingText.length) })}
                   </span>
-                  <span className="text-amber-300 font-bold text-sm">
+                  <span className="text-status-warning font-bold text-sm">
                     {t('novel.progressPercent', { percent: String(progressPercent) })}
                   </span>
                 </div>
@@ -380,12 +380,12 @@ export function NovelAnalysisPage() {
           </div>
 
           <section>
-            <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.summary')}</h3>
+            <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.summary')}</h3>
             <p className="whitespace-pre-wrap rounded-lg bg-slate-800/50 p-3 text-sm text-slate-300">{analysis.summary}</p>
           </section>
 
           <section>
-            <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.styleProfile')}</h3>
+            <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.styleProfile')}</h3>
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="rounded-lg bg-slate-800/50 p-3 text-sm text-slate-300">
                 <div className="font-medium text-slate-100">{t('novel.narration')}</div>
@@ -413,7 +413,7 @@ export function NovelAnalysisPage() {
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.characterHub')}</h3>
+              <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.characterHub')}</h3>
               <div className="space-y-2">
                 {analysis.characters.map((item, index) => (
                   <div key={`${item.name}-${index}`} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-3 text-sm">
@@ -428,7 +428,7 @@ export function NovelAnalysisPage() {
             </div>
 
             <div>
-              <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.relationshipNetwork')}</h3>
+              <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.relationshipNetwork')}</h3>
               <div className="space-y-2">
                 {analysis.relationshipMap.map((item, index) => (
                   <div key={`${item.source}-${item.target}-${index}`} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-3 text-sm">
@@ -444,11 +444,11 @@ export function NovelAnalysisPage() {
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.uniqueSettings')}</h3>
+              <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.uniqueSettings')}</h3>
               <div className="space-y-2">
                 {analysis.uniqueSettings.map((item, index) => (
                   <div key={`${item.name}-${index}`} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-3 text-sm">
-                    <div className="font-semibold text-slate-100">{item.name} <span className="text-xs text-emerald-300">{item.category}</span></div>
+                    <div className="font-semibold text-slate-100">{item.name} <span className="text-xs text-status-success">{item.category}</span></div>
                     <div className="mt-1 text-slate-400">{item.description}</div>
                     <div className="mt-1 text-slate-500">{t('novel.difference', { value: item.difference })}</div>
                     <div className="mt-1 text-slate-500">{t('novel.usage', { value: item.usage })}</div>
@@ -459,7 +459,7 @@ export function NovelAnalysisPage() {
             </div>
 
             <div>
-              <h3 className="mb-2 text-sm font-medium text-emerald-300">{t('novel.timeline')}</h3>
+              <h3 className="mb-2 text-sm font-medium text-status-success">{t('novel.timeline')}</h3>
               <div className="space-y-2">
                 {analysis.timeline.map((item) => (
                   <div key={item.order} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-3 text-sm">
@@ -473,7 +473,7 @@ export function NovelAnalysisPage() {
 
           <section>
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-sm font-medium text-emerald-300">{t('novel.lorebookEntries')}</h3>
+              <h3 className="text-sm font-medium text-status-success">{t('novel.lorebookEntries')}</h3>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(lorebookCategoryCounts).map(([category, count]) => (
                   <span key={category} className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[11px] text-emerald-200">
@@ -487,7 +487,7 @@ export function NovelAnalysisPage() {
                 <div key={`${entry.name}-${index}`} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-slate-100">{entry.name}</span>
-                    <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-300">{entry.category}</span>
+                    <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-status-success">{entry.category}</span>
                   </div>
                   <div className="mt-2 text-xs text-slate-500">{t('novel.triggerWords', { keys: entry.keys?.join('、') })}</div>
                   {(entry.parent || entry.purpose) && (
@@ -505,7 +505,7 @@ export function NovelAnalysisPage() {
 
           {analysis.cleaningNotes.length > 0 && (
             <section>
-              <h3 className="mb-2 text-sm font-medium text-amber-300">{t('novel.cleaningNotes')}</h3>
+              <h3 className="mb-2 text-sm font-medium text-status-warning">{t('novel.cleaningNotes')}</h3>
               <ul className="list-disc space-y-1 pl-5 text-sm text-slate-400">
                 {analysis.cleaningNotes.map((note, index) => <li key={index}>{note}</li>)}
               </ul>

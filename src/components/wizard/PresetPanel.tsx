@@ -83,7 +83,7 @@ export function PresetPanel() {
           <span className="text-sm font-semibold text-white">{t('preset.panelTitle')}</span>
           {preset && (
             <>
-              <span className="text-[10px] text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] text-primary-bright bg-primary-tint px-1.5 py-0.5 rounded">
                 {t('preset.enabledRulesShort', { enabled: String(enabledCount), total: String(preset.prompts.length) })}
               </span>
               {preset.isBuiltIn && (
@@ -144,7 +144,7 @@ export function PresetPanel() {
                   type="checkbox"
                   checked={p.enabled}
                   onChange={() => handleToggle(i)}
-                  className="rounded border-slate-600 bg-slate-800 text-indigo-600"
+                  className="rounded border-slate-600 bg-slate-800 text-primary"
                 />
                 <span className={`truncate ${p.enabled ? 'text-slate-200' : 'text-slate-500 line-through'}`}>
                   {p.name}

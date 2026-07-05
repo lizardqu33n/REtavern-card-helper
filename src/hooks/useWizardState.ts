@@ -165,23 +165,20 @@ export function useWizardState(editId?: number) {
         const hasValidChar = draft.characters.some((c) => c.name?.trim());
         return hasValidChar ? null : '至少需要一个有名称的角色';
       }
-      case 3: {
-        // Optional, but if entries exist they must be valid
-        for (const entry of draft.lorebookEntries) {
-          // Constant entries don't need keys; keyword entries need at least one
-          if (!entry.constant && entry.keys.length === 0 && entry.content?.trim()) {
-            return '每个关键词触发条目需要至少一个触发关键词';
-          }
-        }
+      case 3:
+        // World Book step is optional; entries without trigger keys are allowed
+        // so users can freely manage staged/dispatcher entries.
         return null;
-      }
       case 4:
         // MVU Variables — always optional
         return null;
       case 5:
+        // Staged worldbook — optional
+        return null;
+      case 6:
         // First message — required
         return draft.firstMessage?.trim() ? null : '开场白不能为空';
-      case 6:
+      case 7:
         // Polish & Export — always valid
         return null;
       default:

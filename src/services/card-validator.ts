@@ -174,9 +174,11 @@ export function validateCard(card: Record<string, unknown>): ValidationResult {
       );
       if (mvuEnabled && mvuEntries.length > 0) {
         // Check initvar exists
-        const hasInitvar = mvuEntries.some(e => e.name === '[InitVar]请勿打开');
-        if (!hasInitvar) {
+        const initvarEntry = mvuEntries.find(e => e.name === '[InitVar]请勿打开');
+        if (!initvarEntry) {
           warnings.push('MVU 已启用但缺少 [InitVar] 初始变量条目');
+        } else if (!(initvarEntry.content as string || '').trim()) {
+          warnings.push('MVU 已启用但 [InitVar] 内容为空，运行时将报错「没有找到 InitVar 数据」');
         }
         // Check update rules exists
         const hasUpdateRules = mvuEntries.some(e => e.name === '[mvu_update]变量更新规则');

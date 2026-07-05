@@ -34,8 +34,12 @@ export function TagInput({ label, tags, onChange, placeholder = 'Type and press 
 
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-sm font-medium text-slate-300">{label}</label>}
-      <div 
+      {label && (
+        <label className="text-sm font-medium" style={{ color: 'color-mix(in srgb, var(--text-color) 80%, transparent)' }}>
+          {label}
+        </label>
+      )}
+      <div
         className="flex flex-wrap gap-1.5 rounded-lg px-2 py-1.5 min-h-[38px]"
         style={{
           backgroundColor: 'var(--input-bg, #0f172a)',
@@ -47,30 +51,26 @@ export function TagInput({ label, tags, onChange, placeholder = 'Type and press 
         {tags.map((tag, i) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-md bg-indigo-600/30 px-2 py-0.5 text-xs text-indigo-200"
+            className="inline-flex items-center gap-1 rounded-md bg-primary-tint-strong px-2 py-0.5 text-xs text-primary-bright"
           >
             {tag}
             <button
               type="button"
               onClick={() => removeTag(i)}
-              className="ml-0.5 text-indigo-300 hover:text-white cursor-pointer"
+              className="ml-0.5 text-primary-bright hover:text-white cursor-pointer"
             >
-              ×
+              &times;
             </button>
           </span>
         ))}
         <input
-          className="flex-1 min-w-[100px] bg-transparent text-sm text-slate-100 placeholder-slate-500 outline-none"
+          className="flex-1 min-w-[100px] bg-transparent text-sm outline-none"
+          style={{ color: 'var(--text-color, #f1f5f9)' }}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={() => input.trim() && addTag(input)}
           placeholder={tags.length === 0 ? placeholder : ''}
-          style={{ 
-            border: 'none',
-            outline: 'none',
-            boxShadow: 'none',
-          }}
         />
       </div>
     </div>

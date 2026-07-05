@@ -15,26 +15,25 @@ interface WizardShellProps {
   onSave: () => void;
   onSaveDraft?: () => void;
   onClear?: () => void;
+  onClearStep?: () => void;
   stepError: string | null;
   saving: boolean;
-  /** Optional extra action buttons rendered next to "下一步" */
   extraActions?: React.ReactNode;
-  /** Hide the bottom navigation bar (used when step renders its own nav) */
   hideBottomNav?: boolean;
   children: React.ReactNode;
 }
 
-export function WizardShell({ currentStep, onPrev, onNext, onSave, onSaveDraft, onClear, stepError, saving, extraActions, hideBottomNav, children }: WizardShellProps) {
+export function WizardShell({ currentStep, onPrev, onNext, onSave, onSaveDraft, onClear, onClearStep, stepError, saving, extraActions, hideBottomNav, children }: WizardShellProps) {
   const { t } = useTranslation();
   const isFirst = currentStep === 1;
   const isLast = currentStep === WIZARD_STEPS.length;
-  const stepKeys = ['wizard.stepName','wizard.stepCharacters','wizard.stepWorldBook','wizard.stepMvu','wizard.stepFirstMessage','wizard.stepExport'];
+  const stepKeys = ['wizard.stepName','wizard.stepCharacters','wizard.stepWorldBook','wizard.stepMvu','wizard.stepStagedMode','wizard.stepFirstMessage','wizard.stepExport'];
+  const borderColor = 'rgba(255, 255, 255, 0.05)';
 
   return (
     <div>
       {/* Step indicator bar */}
       <div className="mb-4 sm:mb-8">
-        {/* Mobile: horizontally scrollable, Desktop: full width */}
         <div className="overflow-x-auto scrollbar-none -mx-3 sm:mx-0 px-3 sm:px-0 pb-2 sm:pb-0">
           <div className="flex items-center justify-between min-w-[420px] sm:min-w-0">
             {WIZARD_STEPS.map((step, i) => {
@@ -43,12 +42,11 @@ export function WizardShell({ currentStep, onPrev, onNext, onSave, onSaveDraft, 
 
               return (
                 <div key={step.id} className="flex items-center">
-                  {/* Step circle */}
                   <div className="flex flex-col items-center">
                     <div
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition-all duration-300
                         ${isCurrent
-                          ? 'bg-gradient-to-b from-indigo-400 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-110'
+                          ? 'bg-gradient-to-b from-indigo-400 to-indigo-600 text-white shadow-lg shadow-primary-glow scale-110'
                           : isCompleted
                             ? 'bg-emerald-500/90 text-white shadow-md shadow-emerald-500/20'
                             : 'bg-slate-700/60 text-slate-500'
@@ -56,76 +54,84 @@ export function WizardShell({ currentStep, onPrev, onNext, onSave, onSaveDraft, 
                     >
                       {isCompleted ? <Check size={12} strokeWidth={3} /> : step.id}
                     </div>
-                    <span className={`mt-1 sm:mt-1.5 text-[10px] sm:text-[11px] font-medium whitespace-nowrap transition-colors duration-200
-                      ${isCurrent ? 'text-indigo-300' : isCompleted ? 'text-emerald-400/70' : 'text-slate-600'}`}>
+                    <span
+                      className={`mt-1 sm:mt-1.5 text-[10px] sm:text-[11px] font-medium whitespace-nowrap transition-colors duration-200
+                        ${isCurrent ? 'text-primary-bright' : isCompleted ? 'text-emerald-400/70' : 'text-slate-600'}`}
+                    >
                       {t(stepKeys[step.id - 1])}
                     </span>
                   </div>
-                  {/* Connector line */}
                   {i < WIZARD_STEPS.length - 1 && (
-                    <div className={`flex-1 h-[2px] mx-1.5 sm:mx-2 min-w-[12px] sm:min-w-[16px] rounded-full transition-colors duration-500
-                      ${isCompleted ? 'bg-emerald-500/50' : 'bg-slate-700/40'}`} />
+                    <div
+                      className={`flex-1 h-[2px] mx-1.5 sm:mx-2 min-w-[12px] sm:min-w-[16px] rounded-full transition-colors duration-500
+                        ${isCompleted ? 'bg-emerald-500/50' : 'bg-slate-700/40'}`}
+                    />
                   )}
                 </div>
               );
             })}
           </div>
         </div>
-        {/* Mobile: step progress text */}
-        <p className="md:hidden text-center text-xs text-slate-500 mt-1">
+        <p className="md:hidden text-center text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--text-color) 40%, transparent)' }}>
           {t('wizard.stepIndicator', { current: String(currentStep), total: String(WIZARD_STEPS.length) })}
         </p>
       </div>
 
       {/* Step content */}
-      <div className="min-h-[300px] sm:min-h-[400px]">
+      <div className="min-h-[200px] sm:min-h-[280px]">
         {children}
       </div>
 
       {/* Error display */}
       {stepError && (
-        <div className="mt-4 rounded-lg bg-red-900/20 border border-red-500/30 px-4 py-2.5 text-sm text-red-300 animate-scale-in">
+        <div
+          className="mt-3 rounded-lg bg-red-900/20 border border-red-500/30 px-4 py-2.5 text-sm text-red-300 animate-scale-in"
+        >
           {stepError}
         </div>
       )}
 
       {/* Navigation buttons */}
       {!hideBottomNav && (
-      <div className="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-between gap-3 border-t border-white/5 pt-4 sm:pt-6">
-        <Button variant="ghost" onClick={onPrev} disabled={isFirst}>
-          ← {t('common.previous')}
-        </Button>
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {onClear && (
-            <Button variant="ghost" onClick={onClear} disabled={saving}>
-              {t('wizard.clearDraft')}
-            </Button>
-          )}
-          {onSaveDraft && (
-            <Button variant="secondary" onClick={onSaveDraft} disabled={saving}>
-              {t('wizard.saveDraft')}
-            </Button>
-          )}
-          {extraActions}
-          {isLast ? (
-            <Button onClick={onSave} disabled={saving}>
-              {saving ? t('common.saving') : t('wizard.saveCard')}
-            </Button>
-          ) : (
-            <Button onClick={onNext}>
-              {t('common.next')} →
-            </Button>
-          )}
+        <div className="mt-3 sm:mt-5 flex flex-col sm:flex-row justify-between gap-3 pt-3 sm:pt-4" style={{ borderTop: `1px solid ${borderColor}` }}>
+          <Button variant="ghost" onClick={onPrev} disabled={isFirst} className="w-full sm:w-auto">
+            &larr; {t('common.previous')}
+          </Button>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3 sm:flex-wrap sm:justify-end">
+            {onClear && (
+              <Button variant="ghost" onClick={onClear} disabled={saving}>
+                {t('wizard.clearDraft')}
+              </Button>
+            )}
+            {onClearStep && (
+              <Button variant="ghost" onClick={onClearStep} disabled={saving}>
+                {t('wizard.clearCurrentStep')}
+              </Button>
+            )}
+            {onSaveDraft && (
+              <Button variant="secondary" onClick={onSaveDraft} disabled={saving}>
+                {t('wizard.saveDraft')}
+              </Button>
+            )}
+            {extraActions}
+            {isLast ? (
+              <Button onClick={onSave} disabled={saving}>
+                {saving ? t('common.saving') : t('wizard.saveCard')}
+              </Button>
+            ) : (
+              <Button onClick={onNext}>
+                {t('common.next')} &rarr;
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
       )}
-      {/* When bottom nav is hidden, still show previous at the bottom */}
       {hideBottomNav && (
-      <div className="mt-4 sm:mt-8 flex justify-start border-t border-white/5 pt-4 sm:pt-6">
-        <Button variant="ghost" onClick={onPrev} disabled={isFirst}>
-          ← {t('common.previous')}
-        </Button>
-      </div>
+        <div className="mt-3 sm:mt-5 flex justify-start pt-3 sm:pt-4" style={{ borderTop: `1px solid ${borderColor}` }}>
+          <Button variant="ghost" onClick={onPrev} disabled={isFirst}>
+            &larr; {t('common.previous')}
+          </Button>
+        </div>
       )}
     </div>
   );

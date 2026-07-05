@@ -23,7 +23,7 @@ export function OrganizePreviewTable({
 }: OrganizePreviewTableProps) {
   const { t } = useTranslation();
   return (
-    <div className="mb-4 rounded-lg border border-amber-700/40 bg-slate-900/80 overflow-hidden">
+    <div className="mb-4 rounded-lg border border-amber-700/40 bg-slate-900/80">
       <div className="flex items-center justify-between px-4 py-2 bg-amber-900/20 border-b border-amber-700/30">
         <span className="text-sm font-semibold text-amber-300">
           {t('worldBook.organizeSuggestionsTitle', { count: String(suggestions.length) })}

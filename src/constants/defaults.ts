@@ -186,7 +186,7 @@ export interface EjsEntryConfig {
   /** Entry ID in lorebookEntries */
   entryId: string;
   /** EJS complexity level */
-  complexity: '显隐' | '段落控制' | '动态文本';
+  complexity: '显隐' | '段落控制' | '动态文本' | '分阶段调度';
   /** Condition expression (for @@if or if/else) */
   condition: string;
   /** Variable names used in this entry */
@@ -199,6 +199,8 @@ export interface MvuConfig {
   enabled: boolean;
   /** Editor mode: 'expert' = full manual control, 'beginner' = AI-assisted simplified */
   mode: 'expert' | 'beginner';
+  /** Currently selected beginner template id (when mode === 'beginner') */
+  beginnerTemplateId?: string;
   /** Schema sections */
   schemaSections: MvuSchemaSection[];
   /** Update rules */
@@ -217,6 +219,48 @@ export interface MvuConfig {
   statusBarHtml: string;
   /** Status bar style preset id */
   statusBarStyle: string;
+}
+
+/** 分阶段模式：单个角色一个阶段轴的剖析结果 */
+export interface StagedModeCharacter {
+  /** 角色名 */
+  name: string;
+  /** 来源世界书条目 comment（便于追溯） */
+  sourceComment?: string;
+  /** 一句话身份概括 */
+  summary: string;
+  /** 阶段轴变量路径（点分，必须已在 MVU 中定义，如 "林雅宁.情感天平"） */
+  axisPath: string;
+  /** 阶段轴变量类型：'number'（数值阈值型）| 'enum'（离散型） */
+  axisType: 'number' | 'enum';
+  /** 数值轴比较方向（仅 number）：'>=' 阈值以上触发 | '<=' 阈值以下触发 */
+  numericDirection?: '>=' | '<=';
+  /** 阶段列表（顺序即 if/else if 顺序，从最极端到初始，或从初始到极端） */
+  stages: StagedModeStage[];
+}
+
+/** 分阶段模式：单个阶段定义 */
+export interface StagedModeStage {
+  /** 阶段名（用作子条目 comment 后缀与展示） */
+  name: string;
+  /** 触发条件表达式（不含外层括号），如 ">= 90" / "<= -80" / "=== '朋友'" */
+  condition: string;
+  /** AI 给出的简单人设/剧情注解（可重 roll） */
+  annotation: string;
+  /** 该阶段的子条目内容（AI 生成的人设/剧情详细文本，键值对或自然段） */
+  content?: string;
+}
+
+/** 分阶段模式配置（新步骤 StepStagedMode 的状态） */
+export interface StagedModeConfig {
+  /** 是否启用分阶段模式 */
+  enabled: boolean;
+  /** 剧情 标签/模板：'pure-love' | 'ntr' | 'dual-route' */
+  templateId: 'pure-love' | 'ntr' | 'dual-route';
+  /** 调度条目命名前缀（如 "林雅宁分阶段人设"），默认 "分阶段人设" */
+  dispatcherPrefix: string;
+  /** AI 剖析出的角色阶段框架列表 */
+  characters: StagedModeCharacter[];
 }
 
 /**
@@ -260,6 +304,8 @@ export interface WizardDraft {
   mvu?: MvuConfig;
   /** Whether to use MVU-aware export (embeds scripts, Zod.txt, regex) */
   useMvuExport?: boolean;
+  /** 分阶段模式配置（步骤5，可选启用） */
+  stagedMode?: StagedModeConfig;
 }
 
 /** Empty character template for Step 2 of the wizard */
@@ -383,6 +429,7 @@ export function createEmptyDraft(): WizardDraft {
     mvu: {
       enabled: false,
       mode: 'beginner',
+      beginnerTemplateId: undefined,
       schemaSections: [],
       updateRules: [],
       ejsConfigs: [],
@@ -391,11 +438,19 @@ export function createEmptyDraft(): WizardDraft {
       initvarYamlContent: '',
       updateRulesYamlContent: '',
       statusBarHtml: '',
-      statusBarStyle: 'minimal-dark',
+      statusBarStyle: 'compact-panel',
     },
     useMvuExport: false,
 
-    // Step 5: First message
+    // Step 5: Staged Mode (optional, off by default)
+    stagedMode: {
+      enabled: false,
+      templateId: 'pure-love',
+      dispatcherPrefix: '分阶段人设',
+      characters: [],
+    },
+
+    // Step 6: First message
     firstMessage: '',
 
     // ── V2 Advanced Fields ──────────────────────────────────────────────────
@@ -419,6 +474,7 @@ export function createEmptyMvuConfig(): MvuConfig {
   return {
     enabled: false,
     mode: 'beginner',
+    beginnerTemplateId: undefined,
     schemaSections: [],
     updateRules: [],
     ejsConfigs: [],
@@ -427,7 +483,7 @@ export function createEmptyMvuConfig(): MvuConfig {
     initvarYamlContent: '',
     updateRulesYamlContent: '',
     statusBarHtml: '',
-    statusBarStyle: 'minimal-dark',
+    statusBarStyle: 'compact-panel',
   };
 }
 
@@ -437,6 +493,7 @@ export const WIZARD_STEPS = [
   { id: 2, label: '角色配置', required: true },
   { id: 3, label: '世界书', required: false },
   { id: 4, label: 'MVU变量', required: false },
-  { id: 5, label: '开场白', required: true },
-  { id: 6, label: '美化导出', required: false },
+  { id: 5, label: '分阶段模式', required: false },
+  { id: 6, label: '开场白', required: true },
+  { id: 7, label: '美化导出', required: false },
 ] as const;

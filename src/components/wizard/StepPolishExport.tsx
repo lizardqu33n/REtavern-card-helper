@@ -17,14 +17,23 @@ import { Button } from '../shared/Button';
 import { TextArea } from '../shared/TextArea';
 import { useToast } from '../shared/Toast';
 import { useTranslation } from '../../i18n/I18nContext';
-import { exportAsJson, exportAsPng, assembleCard } from '../../services/card-exporter';
+import { exportAsJson, exportAsPng, assembleCard, findStagedLorebookEntryIndices } from '../../services/card-exporter';
 import { validateCard } from '../../services/card-validator';
 import { validateMvuConsistency, buildMvuScriptBundle } from '../../services/mvu-builder';
 import { autoFixEntries } from '../../services/card-fixers';
-import { generateId, createEmptyLorebookEntry } from '../../constants/defaults';
+import { generateId, createEmptyLorebookEntry, MVU_LOREBOOK_ENTRY_NAMES } from '../../constants/defaults';
 import type { WizardDraft, LorebookEntry } from '../../constants/defaults';
 import { useAIGenerate } from '../../hooks/useAIGenerate';
 import type { MvuConsistencyIssue } from '../../services/mvu-builder';
+import { QualityCheckPanel } from './QualityCheckPanel';
+import { OptimizeCompareModal } from './OptimizeCompareModal';
+import type { OptimizeFieldKey } from '../../services/card-optimizer';
+
+function isSpecialLorebookEntry(entry: LorebookEntry, idx: number, stagedIndices: Set<number>): boolean {
+  const name = (entry.name || '').trim();
+  const comment = (entry.comment || '').trim();
+  return MVU_LOREBOOK_ENTRY_NAMES.includes(name) || MVU_LOREBOOK_ENTRY_NAMES.includes(comment) || stagedIndices.has(idx);
+}
 
 interface StepPolishExportProps {
   draft: WizardDraft;
@@ -38,6 +47,8 @@ interface StepPolishExportProps {
   onFixEntries?: (entries: LorebookEntry[]) => void;
   /** Callback for AI-driven draft patch (e.g. first message rewrite) */
   onUpdateDraft?: (patch: Partial<WizardDraft>) => void;
+  /** Jump to a wizard step (1-based) for manual fix from quality check. */
+  onJumpToStep?: (step: number) => void;
 }
 
 interface ConsistencyIssue {
@@ -47,7 +58,7 @@ interface ConsistencyIssue {
   fix?: MvuConsistencyIssue['fix'];
 }
 
-export function StepPolishExport({ draft, cardName, characterDescriptions, worldbookContext, pngBuffer, onPngFileSelect, onFixEntries, onUpdateDraft }: StepPolishExportProps) {
+export function StepPolishExport({ draft, cardName, characterDescriptions, worldbookContext, pngBuffer, onPngFileSelect, onFixEntries, onUpdateDraft, onJumpToStep }: StepPolishExportProps) {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const { generateText } = useAIGenerate();
@@ -60,6 +71,19 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
   const [exportFormat, setExportFormat] = useState<'json' | 'png'>('json');
   const [cardPreview, setCardPreview] = useState<string>('');
   const [exporting, setExporting] = useState(false);
+  const [optimizeOpen, setOptimizeOpen] = useState(false);
+  const [optimizePreselect, setOptimizePreselect] = useState<OptimizeFieldKey[]>([]);
+
+  const VALID_OPTIMIZE_FIELDS: OptimizeFieldKey[] = [
+    'cardName', 'tags', 'firstMessage', 'lorebookEntries', 'mvu.statusBarHtml', 'mvu.schemaSections',
+  ];
+
+  const handleOpenOptimize = useCallback((fields: string[]) => {
+    const validSet = new Set(VALID_OPTIMIZE_FIELDS as string[]);
+    const valid = (fields || []).filter((f): f is OptimizeFieldKey => Boolean(f) && validSet.has(f));
+    setOptimizePreselect(valid.length > 0 ? valid : ['firstMessage', 'lorebookEntries']);
+    setOptimizeOpen(true);
+  }, []);
 
   // ── Stats ────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -84,13 +108,17 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
     const allIssues: ConsistencyIssue[] = [];
 
     // 1. Card V2 spec validation
-    const card = assembleCard(draft);
-    const cardValidation = validateCard(card as unknown as Record<string, unknown>);
-    for (const err of cardValidation.errors) {
-      allIssues.push({ type: 'error', source: 'V2规范', message: err });
-    }
-    for (const warn of cardValidation.warnings) {
-      allIssues.push({ type: 'warning', source: 'V2规范', message: warn });
+    try {
+      const card = assembleCard(draft);
+      const cardValidation = validateCard(card as unknown as Record<string, unknown>);
+      for (const err of cardValidation.errors) {
+        allIssues.push({ type: 'error', source: 'V2规范', message: err });
+      }
+      for (const warn of cardValidation.warnings) {
+        allIssues.push({ type: 'warning', source: 'V2规范', message: warn });
+      }
+    } catch {
+      allIssues.push({ type: 'error', source: 'V2规范', message: '卡片数据异常，无法完成 V2 规范校验' });
     }
 
     // 2. MVU consistency check
@@ -136,21 +164,31 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
     }
 
     // 5. World book entry checks
-    const emptyContentEntries = draft.lorebookEntries.filter(e => e.enabled && !e.content?.trim());
+    let stagedIndices = new Set<number>();
+    if (draft.stagedMode?.enabled) {
+      try {
+        stagedIndices = findStagedLorebookEntryIndices(draft.lorebookEntries);
+      } catch {
+        stagedIndices = new Set();
+      }
+    }
+    const userEntries = draft.lorebookEntries.filter((entry, idx) => !isSpecialLorebookEntry(entry, idx, stagedIndices));
+
+    const emptyContentEntries = userEntries.filter(e => e.enabled && !e.content?.trim());
     if (emptyContentEntries.length > 0) {
       allIssues.push({
         type: 'warning',
         source: '世界书',
-        message: `${emptyContentEntries.length} 个启用的条目内容为空`,
+        message: `${emptyContentEntries.length} 个启用的用户条目内容为空`,
       });
     }
 
-    const noKeyEntries = draft.lorebookEntries.filter(e => !e.constant && e.enabled && e.keys.length === 0);
+    const noKeyEntries = userEntries.filter(e => !e.constant && e.enabled && e.keys.length === 0);
     if (noKeyEntries.length > 0) {
       allIssues.push({
         type: 'warning',
         source: '世界书',
-        message: `${noKeyEntries.length} 个非蓝灯条目没有触发关键词`,
+        message: `${noKeyEntries.length} 个非蓝灯用户条目没有触发关键词`,
       });
     }
 
@@ -323,9 +361,9 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
 
       {/* ── Stats Grid ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="rounded-xl bg-indigo-900/20 border border-indigo-700/40 p-3 text-center">
-          <p className="text-2xl font-bold text-indigo-300">{stats.entryCount}</p>
-          <p className="text-[10px] text-indigo-400/60">世界书条目</p>
+        <div className="rounded-xl bg-primary-tint-light border border-primary-tint-light p-3 text-center">
+          <p className="text-2xl font-bold text-primary-bright">{stats.entryCount}</p>
+          <p className="text-[10px] text-primary-muted">世界书条目</p>
         </div>
         <div className="rounded-xl bg-emerald-900/20 border border-emerald-700/40 p-3 text-center">
           <p className="text-2xl font-bold text-emerald-300">{stats.constantCount}</p>
@@ -339,6 +377,15 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
           <p className="text-2xl font-bold text-purple-300">{stats.estimatedTokens}</p>
           <p className="text-[10px] text-purple-400/60">预估 Token</p>
         </div>
+      </div>
+
+      {/* ── Quality Check ────────────────────────────────────────────────── */}
+      <div className="mb-4">
+        <QualityCheckPanel
+          draft={draft}
+          onJumpToStep={onJumpToStep}
+          onOpenOptimize={handleOpenOptimize}
+        />
       </div>
 
       {/* ── Validation Section ────────────────────────────────────────────── */}
@@ -437,7 +484,7 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
               type="radio"
               checked={exportFormat === 'json'}
               onChange={() => setExportFormat('json')}
-              className="text-indigo-600"
+              className="text-primary"
             />
             JSON 格式
           </label>
@@ -446,7 +493,7 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
               type="radio"
               checked={exportFormat === 'png'}
               onChange={() => setExportFormat('png')}
-              className="text-indigo-600"
+              className="text-primary"
             />
             PNG 格式
           </label>
@@ -462,7 +509,7 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
               type="file"
               accept="image/png"
               onChange={handlePngUpload}
-              className="text-xs text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"
+              className="text-xs text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-[var(--color-primary)] file:text-white hover:file:bg-[var(--color-primary-hover)]"
             />
           </div>
         )}
@@ -544,6 +591,15 @@ export function StepPolishExport({ draft, cardName, characterDescriptions, world
           </details>
         </div>
       )}
+
+      {/* ── AI Optimize Compare Modal ──────────────────────────────────── */}
+      <OptimizeCompareModal
+        isOpen={optimizeOpen}
+        onClose={() => setOptimizeOpen(false)}
+        draft={draft}
+        onUpdateDraft={(patch) => onUpdateDraft?.(patch)}
+        initialSelected={optimizePreselect}
+      />
     </div>
   );
 }

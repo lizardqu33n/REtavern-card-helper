@@ -80,7 +80,7 @@ export function PresetPage() {
       {/* Header */}
       <div className="mb-6 animate-slide-up">
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-indigo-600/20 animate-pulse-slow">
+          <div className="p-2 rounded-lg bg-primary-tint-light animate-pulse-slow">
             <span className="text-xl">📋</span>
           </div>
           <h1 className="text-2xl font-bold text-white">{t('preset.title')}</h1>
@@ -123,7 +123,7 @@ export function PresetPage() {
         {preset && (
           <>
             <span className="text-sm text-slate-400 animate-badge-pop">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-900/50 text-indigo-300">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary-tint text-primary-bright">
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                 {t('preset.enabledCount', { enabled: String(enabledCount), total: String(preset.prompts.length) })}
               </span>
@@ -178,7 +178,7 @@ export function PresetPage() {
           <div className="p-4 rounded-lg bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600/20 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-primary-tint-light flex items-center justify-center">
                   <span className="text-sm">📁</span>
                 </div>
                 <h3 className="font-semibold text-white">{preset.fileName}</h3>
@@ -195,7 +195,7 @@ export function PresetPage() {
           {/* Rule list */}
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-              <span className="w-1 h-4 rounded-full bg-indigo-500"></span>
+              <span className="w-1 h-4 rounded-full bg-primary"></span>
               {t('preset.rulesTitle')}
             </h4>
             <div className="rounded-lg border border-slate-700/50 bg-slate-800/20 overflow-hidden backdrop-blur-sm">
@@ -216,7 +216,7 @@ export function PresetPage() {
                     />
                     <div className={`w-5 h-5 rounded border-2 transition-all duration-300 ${
                       p.enabled 
-                        ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/30' 
+                        ? 'bg-primary border-primary-tint shadow-lg shadow-primary-glow' 
                         : 'bg-slate-800 border-slate-600'
                     }`}>
                       {p.enabled && (
@@ -248,26 +248,26 @@ export function PresetPage() {
           </div>
 
           {/* Tips */}
-          <div className="p-4 rounded-lg bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border border-indigo-700/30 backdrop-blur-sm animate-fade-in-up animation-delay-300">
+          <div className="p-4 rounded-lg bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border border-primary-tint-light backdrop-blur-sm animate-fade-in-up animation-delay-300">
             <div className="flex items-start gap-2">
               <span className="text-lg mt-0.5">💡</span>
               <div>
-                <h4 className="text-sm font-medium text-indigo-300 mb-2">{t('preset.tipsTitle')}</h4>
+                <h4 className="text-sm font-medium text-primary-bright mb-2">{t('preset.tipsTitle')}</h4>
                 <ul className="text-xs text-slate-400 space-y-1">
                   <li className="flex items-start gap-2">
-                    <span className="text-indigo-400">•</span>
+                    <span className="text-primary-muted">•</span>
                     <span>{t('preset.tip1')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-indigo-400">•</span>
+                    <span className="text-primary-muted">•</span>
                     <span>{t('preset.tip2')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-indigo-400">•</span>
+                    <span className="text-primary-muted">•</span>
                     <span>{t('preset.tip3')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-indigo-400">•</span>
+                    <span className="text-primary-muted">•</span>
                     <span>{t('preset.tip4')}</span>
                   </li>
                 </ul>

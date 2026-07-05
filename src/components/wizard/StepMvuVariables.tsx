@@ -11,11 +11,13 @@
  */
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button } from '../shared/Button';
+import { useToast } from '../shared/Toast';
 import { TextInput } from '../shared/TextInput';
 import { TextArea } from '../shared/TextArea';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useAIGenerate } from '../../hooks/useAIGenerate';
 import { MVU_BEGINNER_GENERATE_PROMPT } from '../../constants/prompts';
+import { MultiCharTemplateModal } from './MultiCharTemplateModal';
 import {
   buildSchemaTs,
   buildInitvarYaml,
@@ -29,6 +31,7 @@ import {
   STATUS_BAR_TEMPLATES,
   generateStatusBarHtml,
   buildStatusBarAIPrompt,
+  buildStatusBarModifyAIPrompt,
   generateStatusBarFromAiConfig,
 } from '../../services/status-bar-templates';
 import type {
@@ -61,6 +64,7 @@ const EJS_COMPLEXITY_OPTIONS = [
   { value: '显隐' as const, label: '显隐 (@@if)', desc: '条目级条件显隐' },
   { value: '段落控制' as const, label: '段落控制 (if/else)', desc: '条目内条件分支' },
   { value: '动态文本' as const, label: '动态文本 (<%= %>)', desc: '动态文本替换' },
+  { value: '分阶段调度' as const, label: '分阶段调度 (getWorldInfo)', desc: '常驻调度条目按变量值拉取子条目' },
 ];
 
 // ── Beginner mode preset templates ──────────────────────────────────────────
@@ -75,6 +79,9 @@ interface BeginnerTemplate {
   statusBarTitle: string;
   statusBarVars: string[];
 }
+
+/** Templates that are designed to work with the staged lorebook dispatcher system */
+export const STAGED_COMPATIBLE_TEMPLATE_IDS = ['pure-love', 'ntr', 'dual-route'] as const;
 
 const BEGINNER_TEMPLATES: BeginnerTemplate[] = [
   {
@@ -304,6 +311,85 @@ const BEGINNER_TEMPLATES: BeginnerTemplate[] = [
     statusBarVars: ['修士.境界', '修士.修为', '修士.灵力', '资源.灵石'],
   },
   {
+    id: 'pure-love',
+    name: '甜宠纯爱',
+    icon: '💕',
+    description: '单一情感天平 0~100 单向递增，适合纯甜向剧情',
+    sections: [
+      {
+        name: '关系',
+        variables: [
+          { path: '关系.情感天平', zodType: 'z.coerce.number()', description: '对主角的情感倾向：0=初识，100=深爱，单调递增（只升不降）', prefix: '', initialValue: 0, range: { min: 0, max: 100 } },
+        ],
+      },
+    ],
+    updateRules: [
+      { path: '关系.情感天平', type: 'number', range: '0~100', check: ['正面互动 +(3~8)，特殊事件（送礼/告白） +(10~20)', '只增不减，单调递增，达到阈值自动推进阶段'] },
+    ],
+    statusBarTitle: '💕 纯爱情感',
+    statusBarVars: ['关系.情感天平'],
+  },
+  {
+    id: 'ntr',
+    name: '虐恋NTR',
+    icon: '🖤',
+    description: '单一情感天平 0~100 单向递增，适合纯虐向剧情',
+    sections: [
+      {
+        name: '关系',
+        variables: [
+          { path: '关系.情感天平', zodType: 'z.coerce.number()', description: '情感堕落程度：0=纯洁，100=沉沦，单调递增（只增不减）', prefix: '', initialValue: 0, range: { min: 0, max: 100 } },
+        ],
+      },
+    ],
+    updateRules: [
+      { path: '关系.情感天平', type: 'number', range: '0~100', check: ['被动事件/胁迫 +(5~15)，主动堕落 +(3~8)', '只增不减，单调递增，达到阈值自动推进阶段'] },
+    ],
+    statusBarTitle: '🖤 堕落情感',
+    statusBarVars: ['关系.情感天平'],
+  },
+  {
+    id: 'dual-route',
+    name: '可纯爱可NTR',
+    icon: '🔀',
+    description: '单一情感天平 -100~100，0附近为缓冲带，支持一次性特殊事件',
+    sections: [
+      {
+        name: '关系',
+        variables: [
+          { path: '关系.情感天平', zodType: 'z.coerce.number()', description: '情感倾向核心变量：>0 偏向纯爱主角，<0 偏向 NTR 第三者，0 附近为缓冲带', prefix: '', initialValue: 0, range: { min: -100, max: 100 } },
+          { path: '关系.恶堕事件玩家方', zodType: 'z.boolean()', description: '隐藏标记：玩家方触发恶堕事件（如主角背叛/伤害女主/主动把她推向他人等），一次性大幅拉低情感天平后锁定，防止重复触发', prefix: '$', initialValue: false },
+          { path: '关系.被强制恶堕', zodType: 'z.boolean()', description: '隐藏标记：女主被胁迫/强制发生恶堕事件（如被下药、被威胁、被强迫等），一次性大幅拉低情感天平后锁定，防止重复触发', prefix: '$', initialValue: false },
+        ],
+      },
+    ],
+    updateRules: [
+      {
+        path: '关系.情感天平',
+        type: 'number',
+        range: '-100~100',
+        check: [
+          '纯爱侧：主角真诚关心/保护/尊重/亲密/共同回忆，或女主主动靠近 → +3~15',
+          'NTR侧（敌人受益的"正面"互动）：主角帮情敌/向威胁屈服/牺牲女主利益/让女主单独面对威胁/敌人 → -5~20',
+          'NTR侧（主角负面行为）：主角欺骗/背叛/冷落/主动伤害/暴力 → -5~20',
+          '缓冲带：当前值在 -20~20 时，日常互动只 ±1~3；只有明确指向纯爱或NTR的情节才允许 ±5~15 跨区',
+          '特殊事件：若「玩家方触发恶堕事件（背叛/伤害/主动推向他人）」且 关系.恶堕事件玩家方=false，则一次性 -30~-50 并将 关系.恶堕事件玩家方 设为 true',
+          '特殊事件：若「女主被胁迫/强制发生恶堕事件」且 关系.被强制恶堕=false，则一次性 -30~-50 并将 关系.被强制恶堕 设为 true',
+        ],
+      },
+      {
+        path: '关系.恶堕事件玩家方',
+        check: ['初始 false', '仅在「玩家方触发恶堕事件」时设为 true，一次性事件不可恢复'],
+      },
+      {
+        path: '关系.被强制恶堕',
+        check: ['初始 false', '仅在「女主被强制恶堕」时设为 true，一次性事件不可恢复'],
+      },
+    ],
+    statusBarTitle: '🔀 情感天平',
+    statusBarVars: ['关系.情感天平'],
+  },
+  {
     id: 'custom',
     name: '自定义',
     icon: '✨',
@@ -401,6 +487,7 @@ function applyTemplate(template: BeginnerTemplate): MvuConfig {
   return {
     enabled: true,
     mode: 'beginner',
+    beginnerTemplateId: template.id,
     schemaSections: sections,
     updateRules: updateRules,
     ejsConfigs: [],
@@ -409,7 +496,7 @@ function applyTemplate(template: BeginnerTemplate): MvuConfig {
     initvarYamlContent: buildInitvarYaml(sections),
     updateRulesYamlContent: buildUpdateRulesYaml(updateRules),
     statusBarHtml: '',
-    statusBarStyle: 'minimal-dark',
+    statusBarStyle: 'compact-panel',
   };
 }
 
@@ -422,10 +509,13 @@ interface StepMvuVariablesProps {
   /** Card name + character summaries for AI context */
   cardName?: string;
   characterDescriptions?: string;
+  /** 多角色套模板应用阶段轴信息（供步骤5分阶段模式预填充） */
+  onApplyStageAxes?: (axes: Array<{ characterName: string; axisPath: string }>, templateId: string) => void;
 }
 
-export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = '', characterDescriptions = '' }: StepMvuVariablesProps) {
+export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = '', characterDescriptions = '', onApplyStageAxes }: StepMvuVariablesProps) {
   const { t } = useTranslation();
+  const { addToast } = useToast();
   const { generateText } = useAIGenerate();
   const [activeTab, setActiveTab] = useState<'schema' | 'updateRules' | 'ejs' | 'output'>('schema');
   const [selectedSection, setSelectedSection] = useState(0);
@@ -437,7 +527,13 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
   const [statusBarTitle, setStatusBarTitle] = useState('状态栏');
   const [aiBarGenerating, setAiBarGenerating] = useState(false);
   const [aiBarStyle, setAiBarStyle] = useState('');
+  const [aiBarModifyInstruction, setAiBarModifyInstruction] = useState('');
+  const [aiBarModifying, setAiBarModifying] = useState(false);
   const [showBarCode, setShowBarCode] = useState(false);
+  const [bgImageUrl, setBgImageUrl] = useState('');
+  const [tachieImageUrl, setTachieImageUrl] = useState('');
+  const [avatarImageUrl, setAvatarImageUrl] = useState('');
+  const [showMultiCharModal, setShowMultiCharModal] = useState(false);
 
   const fieldCls = 'w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200';
   const labelCls = 'text-xs text-slate-400';
@@ -583,7 +679,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
   const handleAiGenerate = async () => {
     setAiGenerating(true);
     try {
-      const prompt = MVU_BEGINNER_GENERATE_PROMPT(cardName, characterDescriptions, aiInput);
+      const prompt = MVU_BEGINNER_GENERATE_PROMPT(cardName, characterDescriptions, aiInput, mvu.beginnerTemplateId || selectedTemplate);
       const result = await generateText(prompt.system, prompt.user);
       // Try to parse AI response as JSON
       const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -747,16 +843,38 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
     return html;
   }, [statusBarHtml, mvu.schemaSections]);
 
+  const statusBarModeLabel = statusBarStyle === 'ai-custom'
+    ? 'AI/手动定制'
+    : '模板同步';
+  const statusBarModeHint = statusBarStyle === 'ai-custom'
+    ? '变量变更不会自动重写状态栏，可手动刷新或重新选择模板。'
+    : '变量变更会自动按当前模板重建状态栏。';
+
   // ── Status bar: apply template ──────────────────────────────────────────
   const applyStatusBarTemplate = (templateId: string) => {
     setStatusBarStyle(templateId);
-    const html = generateStatusBarHtml(templateId, mvu.schemaSections, statusBarTitle);
+    let html = generateStatusBarHtml(templateId, mvu.schemaSections, statusBarTitle);
+    // 如果是visual-novel模板，应用用户填写的图片URL
+    if (templateId === 'visual-novel') {
+      if (bgImageUrl) {
+        html = html.replace(/https:\/\/placehold\.co\/800x400\/ffb6c1\/fff\?background/g, bgImageUrl);
+      }
+      if (tachieImageUrl) {
+        html = html.replace(/https:\/\/placehold\.co\/300x500\/transparent\/fff\?text=立绘/g, tachieImageUrl);
+      }
+      if (avatarImageUrl) {
+        html = html.replace(/https:\/\/placehold\.co\/80x80\/e87a90\/fff\?text=头像/g, avatarImageUrl);
+      }
+    }
     onChange({ ...mvu, statusBarStyle: templateId, statusBarHtml: html });
   };
 
   // ── Status bar: AI generate ─────────────────────────────────────────────
   const handleAiGenerateStatusBar = async () => {
-    if (mvu.schemaSections.length === 0) return;
+    if (mvu.schemaSections.length === 0) {
+      addToast('error', '请先添加 MVU 变量，再生成状态栏');
+      return;
+    }
     setAiBarGenerating(true);
     try {
       const prompt = buildStatusBarAIPrompt(mvu.schemaSections, cardName, aiBarStyle);
@@ -770,21 +888,72 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
       cleaned = cleaned.replace(/\{\{format_message_variable::stat_data\.([^}]+)\}\}/g, '{{getvar::stat_data.$1}}');
       // Validate: must contain getvar macro
       if (!cleaned.includes('{{getvar::')) {
-        // AI didn't use macros, reject
+        addToast('error', 'AI 没有保留变量宏，已拒绝应用');
         return;
       }
       onChange({ ...mvu, statusBarHtml: cleaned, statusBarStyle: 'ai-custom' });
-    } catch {
-      // AI generation failed
+      setStatusBarStyle('ai-custom');
+      addToast('success', '状态栏已生成，可在预览中检查后导出');
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : '状态栏生成失败');
     } finally {
       setAiBarGenerating(false);
+    }
+  };
+
+  // ── Status bar: AI modify ────────────────────────────────────────────────
+  const handleAiModifyStatusBar = async () => {
+    if (mvu.schemaSections.length === 0) {
+      addToast('error', '请先添加 MVU 变量，再修改状态栏');
+      return;
+    }
+    const currentHtml = mvu.statusBarHtml || statusBarHtml;
+    if (!currentHtml || currentHtml.includes('暂无变量')) {
+      addToast('error', '当前没有可修改的状态栏');
+      return;
+    }
+    setAiBarModifying(true);
+    try {
+      const prompt = buildStatusBarModifyAIPrompt(mvu.schemaSections, cardName, currentHtml, aiBarModifyInstruction);
+      const result = await generateText(prompt.system, prompt.user);
+      // Clean: remove markdown code fences if present
+      let cleaned = result.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:html)?\n?/, '').replace(/\n?```$/, '');
+      }
+      // 兼容：AI 可能误用 format_message_variable，自动转为正确的 getvar 宏
+      cleaned = cleaned.replace(/\{\{format_message_variable::stat_data\.([^}]+)\}\}/g, '{{getvar::stat_data.$1}}');
+      // Validate: must contain getvar macro
+      if (!cleaned.includes('{{getvar::')) {
+        addToast('error', 'AI 没有保留变量宏，已拒绝应用');
+        return;
+      }
+      onChange({ ...mvu, statusBarHtml: cleaned, statusBarStyle: 'ai-custom' });
+      setStatusBarStyle('ai-custom');
+      addToast('success', '状态栏已修改，可在预览中检查后导出');
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : '状态栏修改失败');
+    } finally {
+      setAiBarModifying(false);
     }
   };
 
   // ── Status bar: regenerate from template when variables change ──────────
   const regenerateStatusBar = () => {
     if (statusBarStyle && statusBarStyle !== 'ai-custom') {
-      const html = generateStatusBarHtml(statusBarStyle, mvu.schemaSections, statusBarTitle);
+      let html = generateStatusBarHtml(statusBarStyle, mvu.schemaSections, statusBarTitle);
+      // 如果是visual-novel模板，应用用户填写的图片URL
+      if (statusBarStyle === 'visual-novel') {
+        if (bgImageUrl) {
+          html = html.replace(/https:\/\/placehold\.co\/800x400\/ffb6c1\/fff\?background/g, bgImageUrl);
+        }
+        if (tachieImageUrl) {
+          html = html.replace(/https:\/\/placehold\.co\/300x500\/transparent\/fff\?text=立绘/g, tachieImageUrl);
+        }
+        if (avatarImageUrl) {
+          html = html.replace(/https:\/\/placehold\.co\/80x80\/e87a90\/fff\?text=头像/g, avatarImageUrl);
+        }
+      }
       onChange({ ...mvu, statusBarHtml: html });
     }
   };
@@ -842,7 +1011,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
           {(['schema', 'updateRules', 'ejs', 'output'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-                activeTab === tab ? 'border-indigo-500 text-indigo-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                activeTab === tab ? 'border-primary-tint text-primary-bright' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
               {{ schema: '📐 Schema', updateRules: '📋 更新规则', ejs: '⚡ EJS', output: '📤 输出' }[tab]}
             </button>
           ))}
@@ -855,7 +1024,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
               {mvu.schemaSections.map((s, i) => (
                 <button key={i} onClick={() => setSelectedSection(i)}
                   className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
-                    i === selectedSection ? 'bg-indigo-600/30 border-indigo-500/50 text-indigo-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                    i === selectedSection ? 'bg-primary-tint-strong border-primary-tint text-primary-bright' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
                   {s.name}
                   {s.variables.length > 0 && <span className="ml-1 text-[10px] text-slate-500">({s.variables.length})</span>}
                 </button>
@@ -895,7 +1064,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div><label className={labelCls}>可见性前缀</label><select value={v.prefix} onChange={(e) => updateVariable(selectedSection, vi, { prefix: e.target.value as MvuPrefix })} className={fieldCls}>{PREFIX_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label} — {p.desc}</option>)}</select></div>
-                            <div><label className={labelCls}>初始值</label><input value={String(v.initialValue ?? '')} onChange={(e) => { let val: unknown = e.target.value; if (v.zodType === 'z.coerce.number()') val = Number(e.target.value) || 0; updateVariable(selectedSection, vi, { initialValue: val }); }} placeholder="0" className={fieldCls} /></div>
+                            <div><label className={labelCls}>初始值</label><input value={String(v.initialValue ?? '')} onChange={(e) => { let val: unknown = e.target.value; if (v.zodType === 'z.coerce.number()') { const parsed = e.target.value === '' ? 0 : Number(e.target.value); val = Number.isNaN(parsed) ? v.initialValue : parsed; } updateVariable(selectedSection, vi, { initialValue: val }); }} placeholder="0" className={fieldCls} /></div>
                           </div>
                           <div><label className={labelCls}>描述</label><input value={v.description} onChange={(e) => updateVariable(selectedSection, vi, { description: e.target.value })} placeholder="变量用途说明" className={fieldCls} /></div>
                           {v.zodType === 'z.coerce.number()' && (
@@ -956,7 +1125,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
             {mvu.updateRules.length === 0 && <p className="text-xs text-slate-500 py-8 text-center">暂无更新规则</p>}
             {mvu.updateRules.map((rule, ri) => (
               <div key={ri} className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3">
-                <div className="flex items-center justify-between"><span className="text-sm font-mono text-indigo-300">{rule.path || '(新规则)'}</span><Button variant="danger" size="sm" onClick={() => removeUpdateRule(ri)}>×</Button></div>
+                <div className="flex items-center justify-between"><span className="text-sm font-mono text-primary-bright">{rule.path || '(新规则)'}</span><Button variant="danger" size="sm" onClick={() => removeUpdateRule(ri)}>×</Button></div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className={labelCls}>变量路径</label>
@@ -1068,7 +1237,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
         {activeTab === 'output' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between"><p className="text-sm text-slate-400">预览生成的 MVU 文件内容（修改变量后自动同步更新）。</p><Button onClick={generateAll}>🔄 强制重新生成</Button></div>
-            <details className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden"><summary className="px-4 py-2 cursor-pointer hover:bg-slate-700/30 text-sm font-medium text-indigo-300">📐 schema.ts</summary><pre className="px-4 pb-3 text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto font-mono">{mvu.schemaTsContent || '(请先添加变量分区和变量)'}</pre></details>
+            <details className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden"><summary className="px-4 py-2 cursor-pointer hover:bg-slate-700/30 text-sm font-medium text-primary-bright">📐 schema.ts</summary><pre className="px-4 pb-3 text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto font-mono">{mvu.schemaTsContent || '(请先添加变量分区和变量)'}</pre></details>
             <details className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden"><summary className="px-4 py-2 cursor-pointer hover:bg-slate-700/30 text-sm font-medium text-amber-300">📋 initvar.yaml</summary><pre className="px-4 pb-3 text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto font-mono">{mvu.initvarYamlContent || '(请先添加变量分区和变量)'}</pre></details>
             <details className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden"><summary className="px-4 py-2 cursor-pointer hover:bg-slate-700/30 text-sm font-medium text-emerald-300">📋 变量更新规则.yaml</summary><pre className="px-4 pb-3 text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto font-mono">{mvu.updateRulesYamlContent || '(请先添加更新规则)'}</pre></details>
             <details className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden"><summary className="px-4 py-2 cursor-pointer hover:bg-slate-700/30 text-sm font-medium text-teal-300">⚡ EJS 预处理</summary><pre className="px-4 pb-3 text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto font-mono">{mvu.ejsPreprocessContent || '(未配置 EJS 条目或使用的变量为空)'}</pre></details>
@@ -1142,6 +1311,14 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
               {aiGenerating ? '⏳ 生成中...' : '✨ AI 生成'}
             </Button>
           </div>
+          <div className="mt-3 pt-3 border-t border-amber-700/20">
+            <p className="text-xs text-amber-400/60 mb-2">
+              多角色卡？可直接为每个角色套用纯爱 / NTR / 双路线模板，并统一生成阶段轴。
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => setShowMultiCharModal(true)}>
+              👥 {t('multiCharTemplate.entryButton')}
+            </Button>
+          </div>
         </div>
 
         {/* Step 3: Variable cards */}
@@ -1160,7 +1337,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
                   <input
                     value={section.name}
                     onChange={(e) => updateSection(si, { name: e.target.value })}
-                    className="text-sm font-medium text-indigo-300 bg-transparent border-b border-transparent hover:border-indigo-500/50 focus:border-indigo-500 focus:outline-none px-1"
+                    className="text-sm font-medium text-primary-bright bg-transparent border-b border-transparent hover:border-primary-tint focus:border-primary-tint focus:outline-none px-1"
                     style={{ width: `${Math.max(4, section.name.length + 2)}ch` }}
                   />
                   {mvu.schemaSections.length > 1 && (
@@ -1189,10 +1366,13 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
                             value={String(v.initialValue ?? '')}
                             onChange={(e) => {
                               let val: unknown = e.target.value;
-                              if (isNumber) val = Number(e.target.value) || 0;
+                              if (isNumber) {
+                                const parsed = e.target.value === '' ? 0 : Number(e.target.value);
+                                val = Number.isNaN(parsed) ? v.initialValue : parsed;
+                              }
                               updateVariable(si, vi, { initialValue: val });
                             }}
-                            className="w-16 text-center rounded border border-slate-600 bg-slate-800 text-xs text-indigo-300 py-0.5"
+                            className="w-16 text-center rounded border border-slate-600 bg-slate-800 text-xs text-primary-bright py-0.5"
                             onClick={(e) => e.stopPropagation()}
                           />
                           <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); removeVariable(si, vi); }}>×</Button>
@@ -1275,8 +1455,14 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
 
         {/* Step 4: Status bar styling & preview */}
         <div className="rounded-xl border border-purple-700/40 bg-purple-950/20 p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-purple-300">🎨 状态栏美化</h3>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-purple-300">🎨 状态栏美化</h3>
+                <span className="rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200">{statusBarModeLabel}</span>
+              </div>
+              <p className="mt-1 text-[10px] text-purple-300/60">{statusBarModeHint}</p>
+            </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={regenerateStatusBar} title="根据当前变量重新生成">
                 🔄 刷新
@@ -1314,6 +1500,58 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
               )}
             </div>
           </div>
+
+          {/* Visual Novel 图片配置 - 仅在选择visual-novel模板时显示 */}
+          {statusBarStyle === 'visual-novel' && (
+            <div className="mb-3 rounded-lg border border-pink-700/30 bg-pink-950/10 p-3">
+              <label className="text-xs text-pink-400/80 mb-1.5 block">🖼️ 图片配置（可选，留空使用占位图）</label>
+              <p className="text-[10px] text-pink-300/50 mb-2">外部图片依赖网络环境，导入 SillyTavern 后可能因跨域或资源失效而无法显示。</p>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] text-slate-500 mb-0.5 block">背景图 URL</label>
+                  <input
+                    value={bgImageUrl}
+                    onChange={(e) => {
+                      setBgImageUrl(e.target.value);
+                      const html = generateStatusBarHtml(statusBarStyle, mvu.schemaSections, statusBarTitle)
+                        .replace(/https:\/\/placehold\.co\/800x400\/ffb6c1\/fff\?background/g, e.target.value || 'https://placehold.co/800x400/ffb6c1/fff?background');
+                      onChange({ ...mvu, statusBarHtml: html });
+                    }}
+                    placeholder="https://example.com/background.jpg"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 mb-0.5 block">角色立绘 URL</label>
+                  <input
+                    value={tachieImageUrl}
+                    onChange={(e) => {
+                      setTachieImageUrl(e.target.value);
+                      const html = generateStatusBarHtml(statusBarStyle, mvu.schemaSections, statusBarTitle)
+                        .replace(/https:\/\/placehold\.co\/300x500\/transparent\/fff\?text=立绘/g, e.target.value || 'https://placehold.co/300x500/transparent/fff?text=立绘');
+                      onChange({ ...mvu, statusBarHtml: html });
+                    }}
+                    placeholder="https://example.com/character.png"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 mb-0.5 block">头像 URL</label>
+                  <input
+                    value={avatarImageUrl}
+                    onChange={(e) => {
+                      setAvatarImageUrl(e.target.value);
+                      const html = generateStatusBarHtml(statusBarStyle, mvu.schemaSections, statusBarTitle)
+                        .replace(/https:\/\/placehold\.co\/80x80\/e87a90\/fff\?text=头像/g, e.target.value || 'https://placehold.co/80x80/e87a90/fff?text=头像');
+                      onChange({ ...mvu, statusBarHtml: html });
+                    }}
+                    placeholder="https://example.com/avatar.jpg"
+                    className={fieldCls}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Title input */}
           <div className="mb-3">
@@ -1356,6 +1594,30 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
             </div>
           </div>
 
+          {/* AI modify */}
+          <div className="mb-3 rounded-lg border border-teal-700/30 bg-teal-950/10 p-3">
+            <label className="text-xs text-teal-400/80 mb-1.5 block">✏️ AI 修改状态栏（可选）</label>
+            <p className="text-[10px] text-teal-400/50 mb-2">
+              用自然语言描述想怎么改当前状态栏，AI 会在保留变量宏的基础上调整样式和布局
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={aiBarModifyInstruction}
+                onChange={(e) => setAiBarModifyInstruction(e.target.value)}
+                placeholder="例如：把标题居中、加大字号、给进度条加圆角、换成粉色系"
+                className={fieldCls}
+              />
+              <Button
+                onClick={handleAiModifyStatusBar}
+                disabled={aiBarModifying || mvu.schemaSections.length === 0 || !(mvu.statusBarHtml || statusBarHtml)}
+                variant="secondary"
+                size="sm"
+              >
+                {aiBarModifying ? '⏳ 修改中' : '✏️ AI 修改'}
+              </Button>
+            </div>
+          </div>
+
           {/* Preview or Code view */}
           {showBarCode ? (
             <div>
@@ -1368,7 +1630,7 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
                 placeholder="状态栏 HTML 代码..."
               />
               <p className="text-[10px] text-slate-500 mt-1">
-                提示：变量必须用 <code className="text-amber-400">{'{{getvar::stat_data.路径}}'}</code> 宏读取
+                提示：编辑时用 <code className="text-amber-400">{'{{getvar::stat_data.路径}}'}</code> 宏读取变量，导出时会自动转换为 SillyTavern 可显示的宏。
               </p>
             </div>
           ) : (
@@ -1395,6 +1657,18 @@ export function StepMvuVariables({ mvu, lorebookEntries, onChange, cardName = ''
             </div>
           </details>
         )}
+
+        {/* 多角色套模板弹窗 */}
+        <MultiCharTemplateModal
+          isOpen={showMultiCharModal}
+          onClose={() => setShowMultiCharModal(false)}
+          cardName={cardName}
+          lorebookEntries={lorebookEntries}
+          onApplyMvu={(newMvu) => {
+            onChange(newMvu);
+          }}
+          onApplyStageAxes={onApplyStageAxes}
+        />
       </div>
     );
   }

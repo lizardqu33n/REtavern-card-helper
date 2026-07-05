@@ -22,8 +22,9 @@
  *   first_mes 末尾自动追加占位符，保证开场消息也会渲染状态栏。
  */
 import { generateId, createEmptyMvuConfig, MVU_LOREBOOK_ENTRY_NAMES } from '../constants/defaults';
-import type { WizardDraft, LorebookEntry, LorebookPosition, MvuConfig } from '../constants/defaults';
+import type { WizardDraft, LorebookEntry, LorebookPosition, MvuConfig, EjsEntryConfig } from '../constants/defaults';
 import { buildMvuScriptBundle } from './mvu-builder';
+import { parseDispatcherContent } from './staged-lorebook-builder';
 
 /**
  * Position string → numeric index mapping.
@@ -75,7 +76,8 @@ function buildFirstMessage(draft: WizardDraft): string {
     const setvarCalls: string[] = [];
     for (const section of draft.mvu.schemaSections) {
       for (const v of section.variables) {
-        if (v.prefix === '$') continue; // 隐藏变量
+        // $ 前缀变量虽然不在状态栏显示，但仍需在 stat_data 中初始化，
+        // 否则后续更新规则和 EJS 调度中 getvar 会得到 undefined。
         const initVal = v.initialValue;
         if (initVal !== undefined && initVal !== null && initVal !== '') {
           // 数字类型不引号，字符串类型需要引号
@@ -120,6 +122,35 @@ function buildFirstMessage(draft: WizardDraft): string {
  *
  * 状态栏渲染通过 regex_scripts 实现，不是世界书条目。
  */
+
+/**
+ * 检测哪些世界书条目属于分阶段世界书系统。
+ * 返回需要过滤掉的条目索引集合（MVU 未启用时不应导出）。
+ */
+export function findStagedLorebookEntryIndices(entries: LorebookEntry[]): Set<number> {
+  const indices = new Set<number>();
+  const childComments = new Set<string>();
+
+  entries.forEach((entry, idx) => {
+    const parsed = parseDispatcherContent(entry.content || '');
+    if (parsed) {
+      indices.add(idx);
+      parsed.childComments.forEach((c) => childComments.add(c));
+    }
+  });
+
+  entries.forEach((entry, idx) => {
+    if (indices.has(idx)) return;
+    const comment = entry.comment || '';
+    const name = entry.name || '';
+    if (childComments.has(comment) || childComments.has(name)) {
+      indices.add(idx);
+    }
+  });
+
+  return indices;
+}
+
 function buildCardExtensions(draft: WizardDraft, zodScript?: string): Record<string, unknown> {
   if (!draft.mvu?.enabled) return {};
 
@@ -396,8 +427,14 @@ export function assembleCard(draft: WizardDraft, existingId?: number) {
   // ── Build character_book entries (V2 CharacterBook format) ─────────────
   // V2 spec fields go directly on the entry.
   // SillyTavern runtime fields go in `extensions` (preserved by ST on import).
+  const stagedIndices = findStagedLorebookEntryIndices(draft.lorebookEntries);
   const entries = draft.lorebookEntries
-    .filter((entry) => mvuEnabled || !MVU_LOREBOOK_ENTRY_NAMES.includes(entry.name))
+    .filter((entry, idx) => {
+      if (mvuEnabled) return true;
+      if (MVU_LOREBOOK_ENTRY_NAMES.includes(entry.name)) return false;
+      // MVU 未启用时，分阶段世界书的调度条目和子阶段条目也不导出
+      return !stagedIndices.has(idx);
+    })
     .map((entry, i) => ({
     id: i + 1,
     keys: entry.keys,
@@ -754,12 +791,58 @@ function reconstructMvuConfig(
     }
   }
 
+  // Reconstruct ejsConfigs by scanning all entries for EJS patterns.
+  // This restores the association lost during export (ejsConfigs is not persisted
+  // to extensions). Complexity is inferred from content patterns:
+  //   - getWorldInfo( → '分阶段调度'
+  //   - @@if → '显隐'
+  //   - <%_? if / else if → '段落控制'
+  //   - <%= → '动态文本'
+  const ejsConfigs: EjsEntryConfig[] = [];
+  for (const entry of rawEntries) {
+    const content = (entry.content as string) || '';
+    if (!content.includes('<%') && !content.includes('@@if') && !content.includes('getWorldInfo')) continue;
+    const entryId = (entry.id as string) || '';
+    if (!entryId) continue;
+
+    let complexity: EjsEntryConfig['complexity'];
+    if (content.includes('getWorldInfo(')) {
+      complexity = '分阶段调度';
+    } else if (content.includes('@@if')) {
+      complexity = '显隐';
+    } else if (/<%_?\s*(if|else)/.test(content)) {
+      complexity = '段落控制';
+    } else if (content.includes('<%=')) {
+      complexity = '动态文本';
+    } else {
+      continue;
+    }
+
+    // Extract used variables from getvar('stat_data.XXX[0]') patterns
+    const usedVars = Array.from(
+      content.matchAll(/getvar\(\s*'stat_data\.([^[\]'"]+)(?:\[\d+\])?'\s*\)/g),
+    ).map((m) => m[1]);
+    const uniqueVars = Array.from(new Set(usedVars));
+
+    // Extract condition: for 分阶段调度 use axisPath, for others use first if condition
+    let condition = '';
+    if (complexity === '分阶段调度') {
+      const axisMatch = content.match(/getvar\(\s*'stat_data\.([^[\]'"]+)(?:\[\d+\])?'\s*\)/);
+      condition = axisMatch ? axisMatch[1] : '';
+    } else {
+      const ifMatch = content.match(/<%_?\s*if\s*\(([^)]+)\)/) || content.match(/@@if\(([^)]+)\)/);
+      condition = ifMatch ? ifMatch[1].trim() : '';
+    }
+
+    ejsConfigs.push({ entryId, complexity, condition, usedVariables: uniqueVars });
+  }
+
   return {
     enabled: true,
     mode: 'expert', // Default to expert for reconstructed config
     schemaSections: [], // Sections are lost on export; user can re-import
     updateRules: [],
-    ejsConfigs: [],
+    ejsConfigs,
     ejsPreprocessContent,
     schemaTsContent,
     initvarYamlContent,
@@ -801,10 +884,22 @@ export function cardToDraft(card: Record<string, unknown>): WizardDraft {
   }
 
   // Reconstruct lorebook entries from character_book.
-  // 如果卡片没有启用 MVU，丢弃 MVU 相关世界书条目，避免污染编辑器。
+  // 如果卡片没有启用 MVU，丢弃 MVU 相关世界书条目以及分阶段世界书条目，避免污染编辑器。
   const charBook = data.character_book as Record<string, unknown> | undefined;
-  const rawEntries = ((charBook?.entries || []) as Array<Record<string, unknown>>).filter(
-    (e) => mvuEnabled || !MVU_LOREBOOK_ENTRY_NAMES.includes((e.name as string) || '')
+  const allRawEntries = ((charBook?.entries || []) as Array<Record<string, unknown>>);
+  const stagedImportIndices = findStagedLorebookEntryIndices(
+    allRawEntries.map((e) => ({
+      name: (e.name as string) || '',
+      comment: (e.comment as string) || '',
+      content: (e.content as string) || '',
+    } as LorebookEntry)),
+  );
+  const rawEntries = allRawEntries.filter(
+    (e, idx) => {
+      if (mvuEnabled) return true;
+      if (MVU_LOREBOOK_ENTRY_NAMES.includes((e.name as string) || '')) return false;
+      return !stagedImportIndices.has(idx);
+    }
   );
 
   if (characters.length === 0) {
